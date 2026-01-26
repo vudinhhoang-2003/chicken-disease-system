@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"  # Direct access to FastAPI
+    volumes:
+      - ./backend:/app
+      - ./ai_model/01_classification/results/runs/chicken_disease/weights/best.pt:/app/model_store/classification_best.pt
+      - ./ai_model/02_detection/trained_models/chicken_detection_best.pt:/app/model_store/detection_best.pt
+      - ./backend/knowledge_base:/app/knowledge_base
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DATABASE_URL=postgresql://admin:admin123@postgres:5432/chicken_disease
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      - postgres
+      - chromadb
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=chicken_disease
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+volumes:
+  postgres_data:
+  chroma_data:

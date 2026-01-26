@@ -1,0 +1,175 @@
+[
+    {
+        "id": "DIS_01",
+        "ten_benh_tieng_viet": "Bệnh Cầu trùng",
+        "ten_benh_tieng_anh": "Coccidiosis",
+        "trieu_chung_nhan_dien": "Gà ủ rũ, xù lông, sã cánh, uống nhiều nước. Đặc điểm điển hình là phân có lẫn máu tươi, phân sáp nâu, sáp đỏ hoặc sáp vàng. Mào và tích tái nhợt do mất máu.",
+        "nguyen_nhan": "Do ký sinh trùng đơn bào Eimeria gây ra, lây nhiễm qua đường tiêu hóa do ăn phải nang cầu trùng.",
+        "phac_do_dieu_tri": [
+            {
+                "buoc": 1,
+                "mo_ta": "Sử dụng thuốc đặc trị Cầu trùng (chọn 1 trong các loại sau)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "BIO-ZURILCOC",
+                        "hoat_chat": "Toltrazuril",
+                        "nha_san_xuat": "Bio-Pharmachemie",
+                        "lieu_dung": "1 ml / 1 lít nước hoặc 1 ml / 3,5 kg thể trọng. Cho uống liên tục trong 2 ngày. Nghỉ 5 ngày, dùng lại đợt 2 nếu cần.",
+                        "nguon_tham_khao": "Bio-Pharmachemie Product Guide"
+                    },
+                    {
+                        "ten_thuoc": "BIO-ANTICOC",
+                        "hoat_chat": "Sulfadimidine, Diaveridine, Vitamin A, K3",
+                        "nha_san_xuat": "Bio-Pharmachemie",
+                        "lieu_dung": "1 g / 5 kg thể trọng/ngày hoặc 2 g / 1 lít nước. Dùng liên tục 5 ngày.",
+                        "nguon_tham_khao": "Bio-Pharmachemie Product Guide"
+                    },
+                    {
+                        "ten_thuoc": "FIVE-S. PRIM",
+                        "hoat_chat": "Sulfamonomethoxine sodium, Trimethoprim",
+                        "nha_san_xuat": "Fivevet",
+                        "lieu_dung": "Uống 1ml/1 lít nước/ngày hoặc tiêm 1ml/10kg thể trọng. Dùng liên tục 3-5 ngày.",
+                        "nguon_tham_khao": "Fivevet Product Guide"
+                    }
+                ]
+            },
+            {
+                "buoc": 2,
+                "mo_ta": "Cầm máu và bồi bổ sức khỏe (Bắt buộc nếu phân có máu)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "Vitamin K3 + BIO-ELECTROLYTES",
+                        "cong_dung": "Cầm máu, chống xuất huyết ruột và bù nước điện giải.",
+                        "lieu_dung": "Pha nước uống hàng ngày trong quá trình điều trị."
+                    }
+                ]
+            }
+        ],
+        "phong_benh": "Giữ nền chuồng khô ráo, tránh ẩm ướt. Phun sát trùng định kỳ. Dùng vắc-xin phòng bệnh sớm hoặc dùng thuốc phòng định kỳ (BIO-ANTICOC liều phòng bằng 1/2 liều trị)."
+    },
+    {
+        "id": "DIS_02",
+        "ten_benh_tieng_viet": "Bệnh New Castle (Gà rù)",
+        "ten_benh_tieng_anh": "Newcastle Disease",
+        "trieu_chung_nhan_dien": "Gà sốt cao, bỏ ăn, thở khò khè, chảy nước mũi nhớt. Diều đầy hơi (chướng diều). Giai đoạn nặng có triệu chứng thần kinh: liệt chân, cánh xệ, ngoẹo cổ (vặn cổ ra sau), đi vòng tròn. Phân màu xanh hoặc trắng loãng, có thể dính bết hậu môn.",
+        "nguyen_nhan": "Do virus Paramyxovirus gây ra. Bệnh lây lan rất nhanh và tỷ lệ chết cao.",
+        "phac_do_dieu_tri": [
+            {
+                "buoc": 1,
+                "mo_ta": "Xử lý khẩn cấp (Bệnh do Virus KHÔNG CÓ THUỐC ĐẶC TRỊ, chỉ điều trị triệu chứng và chống kế phát)",
+                "hanh_dong": "Cách ly ngay những con có biểu hiện thần kinh/bại liệt. Tiêu hủy nếu quá nặng."
+            },
+            {
+                "buoc": 2,
+                "mo_ta": "Tăng cường miễn dịch toàn đàn (Can thiệp vào ổ dịch)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "HANVET K.T.G (Kháng thể Gà)",
+                        "hoat_chat": "Kháng thể đa giá",
+                        "nha_san_xuat": "Hanvet",
+                        "lieu_dung": "Tiêm bắp hoặc dưới da: 2-4 ml/con. Hoặc cho uống với liều gấp đôi liều tiêm.",
+                        "nguon_tham_khao": "Hanvet Product Guide"
+                    }
+                ]
+            },
+            {
+                "buoc": 3,
+                "mo_ta": "Chống bội nhiễm vi khuẩn (Kế phát)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "Hado-Enpacin",
+                        "hoat_chat": "Oxytetracycline HCl",
+                        "nha_san_xuat": "Fivevet",
+                        "lieu_dung": "10g pha vào 8-10 lít nước, dùng liên tục 3-5 ngày.",
+                        "nguon_tham_khao": "Fivevet Product Guide"
+                    }
+                ]
+            }
+        ],
+        "phong_benh": "Bắt buộc tiêm vắc-xin Lasota (nhỏ mắt/mũi lúc 5-7 ngày tuổi, nhắc lại sau 14 ngày) và vắc-xin tiêm định kỳ."
+    },
+    {
+        "id": "DIS_03",
+        "ten_benh_tieng_viet": "Bệnh Thương hàn",
+        "ten_benh_tieng_anh": "Salmonellosis / Pullorum Disease",
+        "trieu_chung_nhan_dien": "Gà con: Phân trắng dính bết quanh hậu môn, bụng thon, đứng tụ đống kêu chiêm chiếp. Gà lớn: Mào tích nhợt nhạt, teo lại, phân loãng màu xanh hoặc trắng, khát nước, giảm đẻ trứng.",
+        "nguyen_nhan": "Do vi khuẩn Salmonella pullorum (gà con) hoặc Salmonella gallinarum (gà lớn) gây ra.",
+        "phac_do_dieu_tri": [
+            {
+                "buoc": 1,
+                "mo_ta": "Sử dụng kháng sinh đặc trị vi khuẩn Gram âm",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "BIO-FLUMEQUINE 20",
+                        "hoat_chat": "Flumequine",
+                        "nha_san_xuat": "Bio-Pharmachemie",
+                        "lieu_dung": "1 ml / 1 lít nước hoặc 1 ml / 10 kg thể trọng. Dùng liên tục 4-5 ngày.",
+                        "nguon_tham_khao": "Bio-Pharmachemie Product Guide"
+                    },
+                    {
+                        "ten_thuoc": "Five-Enromax 30 Oral",
+                        "hoat_chat": "Enrofloxacin",
+                        "nha_san_xuat": "Fivevet",
+                        "lieu_dung": "1ml / 6 lít nước / 30kg thể trọng. Dùng 3-5 ngày.",
+                        "nguon_tham_khao": "Fivevet Product Guide"
+                    }
+                ]
+            },
+            {
+                "buoc": 2,
+                "mo_ta": "Hỗ trợ tiêu hóa",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "Men tiêu hóa sống (BIO-PROZYME)",
+                        "lieu_dung": "Trộn thức ăn sau khi ngừng kháng sinh để phục hồi đường ruột."
+                    }
+                ]
+            }
+        ],
+        "phong_benh": "Vệ sinh trứng ấp sạch sẽ. Loại bỏ gà mái mang trùng. Định kỳ trộn kháng sinh phòng bệnh liều thấp."
+    },
+    {
+        "id": "DIS_04",
+        "ten_benh_tieng_viet": "Bệnh Gumboro",
+        "ten_benh_tieng_anh": "Infectious Bursal Disease (IBD)",
+        "trieu_chung_nhan_dien": "Gà sốt rất cao, uống nước nhiều nhưng giảm ăn. Phân loãng màu trắng nhớt, có bọt khí hoặc lẫn máu. Gà đi run rẩy, hay mổ vào hậu môn của nhau (do túi Fabricius bị viêm sưng/xuất huyết). Tỷ lệ chết tập trung vào ngày thứ 3-5 sau khi phát bệnh.",
+        "nguyen_nhan": "Do Birnavirus gây ra, tấn công vào túi Fabricius (cơ quan miễn dịch).",
+        "phac_do_dieu_tri": [
+            {
+                "buoc": 1,
+                "mo_ta": "Bệnh do Virus - KHÔNG DÙNG KHÁNG SINH ngay lập tức (sẽ làm gà chết nhanh hơn do suy thận). Tập trung trợ lực.",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "ANTI-GUMBORO + Điện giải",
+                        "hoat_chat": "Thảo dược và chất điện giải",
+                        "nha_san_xuat": "Hanvet",
+                        "lieu_dung": "Pha 1ml ANTI-GUMBORO với 0.5 lít nước + 7g điện giải. Cho uống liên tục 3-5 ngày.",
+                        "nguon_tham_khao": "Hanvet Product Guide"
+                    }
+                ]
+            },
+            {
+                "buoc": 2,
+                "mo_ta": "Tiêm kháng thể (Nếu đàn có giá trị cao)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "HANVET K.T.G",
+                        "lieu_dung": "Tiêm 1-2 ml/con tùy trọng lượng.",
+                        "nguon_tham_khao": "Hanvet Product Guide"
+                    }
+                ]
+            },
+            {
+                "buoc": 3,
+                "mo_ta": "Điều trị kế phát (Chỉ dùng sau khi gà đã cắt sốt, ăn uống lại)",
+                "thuoc_goi_y": [
+                    {
+                        "ten_thuoc": "Amoxycillin hoặc Ampicillin",
+                        "lieu_dung": "Liều nhẹ để chống viêm ruột kế phát."
+                    }
+                ]
+            }
+        ],
+        "phong_benh": "Vắc-xin là biện pháp duy nhất hiệu quả. Chủng vắc-xin Gumboro lúc 7 ngày và nhắc lại lúc 21 ngày tuổi."
+    }
+]
