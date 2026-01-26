@@ -117,7 +117,9 @@ async def health_check():
 
 
 # Include routers
-from app.api.v1.endpoints import detect, chat
+from app.api.v1.endpoints import detect, chat, admin, auth
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(detect.router, prefix="/api/v1/detect", tags=["detection"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 # app.include_router(stream.router, prefix="/ws", tags=["websocket"])
