@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import { Box, Drawer, AppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
-import { Menu as MenuIcon, Dashboard as DashboardIcon, History as HistoryIcon, Psychology as PsychologyIcon, People as PeopleIcon } from '@mui/icons-material';
+import { Menu as MenuIcon, Dashboard as DashboardIcon, History as HistoryIcon, Psychology as PsychologyIcon, People as PeopleIcon, Logout as LogoutIcon } from '@mui/icons-material';
 import { useNavigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const drawerWidth = 240;
 
 const MainLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -48,9 +55,18 @@ const MainLayout = () => {
           <IconButton color="inherit" aria-label="open drawer" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2, display: { sm: 'none' } }}>
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Chicken Disease System - Quản trị viên
           </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}>
+              Xin chào, <b>{user?.name || 'Admin'}</b>
+            </Typography>
+            <IconButton color="inherit" onClick={handleLogout} title="Đăng xuất">
+              <LogoutIcon />
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
       
