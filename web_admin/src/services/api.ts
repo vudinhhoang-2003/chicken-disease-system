@@ -18,16 +18,45 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Xử lý lỗi 401 (Hết hạn token)
+// Response Interceptor: Xử lý lỗi 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // localStorage.removeItem('token');
-      // window.location.href = '/login';
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
+
+// Admin API
+
+export const adminApi = {
+
+  getStats: () => api.get('/admin/stats'),
+
+  getRecentLogs: (limit = 20) => api.get(`/admin/recent-logs?limit=${limit}`),
+
+  
+
+  // Knowledge Base
+
+  getDiseases: () => api.get('/admin/diseases'),
+
+    getDisease: (id: number) => api.get(`/admin/diseases/${id}`),
+
+    createDisease: (data: any) => api.post('/admin/diseases', data),
+
+    updateDisease: (id: number, data: any) => api.put(`/admin/diseases/${id}`, data),
+
+    deleteDisease: (id: number) => api.delete(`/admin/diseases/${id}`),
+
+  };
+
+  
+
+
 
 export default api;

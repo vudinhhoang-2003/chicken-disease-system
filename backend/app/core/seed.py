@@ -3,8 +3,27 @@ import logging
 from pathlib import Path
 from sqlalchemy.orm import Session
 from app.core import models
+from app.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
+
+def seed_users(db: Session):
+    """Create default users if not exist"""
+    user = db.query(models.User).filter(models.User.email == "admin@gmail.com").first()
+    if not user:
+        logger.info("👤 Creating default admin user...")
+        admin_user = models.User(
+            email="admin@gmail.com",
+            full_name="Super Admin",
+            hashed_password=get_password_hash("admin123"),
+            role="admin",
+            is_active=True
+        )
+        db.add(admin_user)
+        db.commit()
+        logger.info("✅ Admin user created: admin@gmail.com / admin123")
+    else:
+        logger.info("✅ Admin user already exists.")
 
 def seed_knowledge_base(db: Session):
     """

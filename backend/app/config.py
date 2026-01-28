@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Demo Video
     demo_video_path: str = "demo_videos/chicken_farm.mp4"
     
+    # Upload Settings
+    upload_dir: str = "uploads"
+    
     # CORS
     cors_origins: list[str] = ["*", "http://localhost:5173", "http://127.0.0.1:5173"]
 

@@ -2,9 +2,10 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.core.database import engine, Base
-from app.core import models # Import models to register them with Base
+import os
 import logging
 
 # Setup logging
@@ -35,6 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount Static Files
+os.makedirs(settings.upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -54,8 +59,9 @@ async def startup_event():
     # Initialize Database & Seed Data
     try:
         from app.core.database import SessionLocal
-        from app.core.seed import seed_knowledge_base
+        from app.core.seed import seed_knowledge_base, seed_users
         db = SessionLocal()
+        seed_users(db)
         seed_knowledge_base(db)
         db.close()
     except Exception as e:
