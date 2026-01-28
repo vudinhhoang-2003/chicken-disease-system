@@ -6,6 +6,8 @@ from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine
 from app.api.deps import get_current_active_superuser
 from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate
+from app.schema.user import UserCreate, UserUpdate, UserOut
+from app.core.security import get_password_hash
 from app.services.rag_service import get_rag_service
 
 router = APIRouter()
@@ -186,3 +188,94 @@ async def delete_disease(
     db.delete(disease) # Cascade delete should handle steps/medicines
     db.commit()
     return {"message": "Đã xóa thành công"}
+
+@router.get("/users")
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Lấy danh sách người dùng"""
+    users = db.query(User).offset(skip).limit(limit).all()
+    # Mask password
+    for user in users:
+        user.hashed_password = "***"
+    return users
+
+@router.post("/users", response_model=UserOut)
+async def create_user(
+    user_in: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Tạo người dùng mới"""
+    user = db.query(User).filter(User.email == user_in.email).first()
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email này đã được sử dụng.",
+        )
+    user = User(
+        email=user_in.email,
+        hashed_password=get_password_hash(user_in.password),
+        full_name=user_in.full_name,
+        is_superuser=user_in.is_superuser,
+        is_active=user_in.is_active,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@router.put("/users/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: int,
+    user_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Cập nhật thông tin người dùng"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Người dùng không tồn tại",
+        )
+    user_data = user_in.dict(exclude_unset=True)
+    if "password" in user_data and user_data["password"]:
+        password = user_data["password"]
+        hashed_password = get_password_hash(password)
+        del user_data["password"]
+        user.hashed_password = hashed_password
+    
+    for field, value in user_data.items():
+        setattr(user, field, value)
+        
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Xóa người dùng"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Người dùng không tồn tại",
+        )
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Không thể tự xóa chính mình",
+        )
+        
+    db.delete(user)
+    db.commit()
+    return {"message": "Đã xóa người dùng thành công"}

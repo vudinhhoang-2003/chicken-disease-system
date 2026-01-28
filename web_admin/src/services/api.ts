@@ -53,6 +53,11 @@ export const adminApi = {
 
     deleteDisease: (id: number) => api.delete(`/admin/diseases/${id}`),
 
+    // User Management
+    getUsers: () => api.get('/admin/users'),
+    createUser: (data: any) => api.post('/admin/users', data),
+    updateUser: (id: number, data: any) => api.put(`/admin/users/${id}`, data),
+    deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
   };
 
   
