@@ -44,6 +44,7 @@ class DiseaseBase(BaseModel):
     symptoms: str
     cause: str
     prevention: str
+    source: Optional[str] = None
 
 class DiseaseCreate(DiseaseBase):
     treatment_steps: List[TreatmentStepCreate] = []
@@ -54,6 +55,7 @@ class DiseaseUpdate(BaseModel):
     symptoms: Optional[str] = None
     cause: Optional[str] = None
     prevention: Optional[str] = None
+    source: Optional[str] = None
     # Note: Updating nested steps/medicines is complex, usually handled separately or by replacing list
 
 class DiseaseOut(DiseaseBase):

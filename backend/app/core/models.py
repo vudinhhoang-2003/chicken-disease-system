@@ -115,6 +115,7 @@ class Disease(Base):
     symptoms = Column(Text) # Triệu chứng
     cause = Column(Text) # Nguyên nhân
     prevention = Column(Text) # Phòng bệnh
+    source = Column(String, nullable=True) # Nguồn tài liệu tham khảo
     
     treatment_steps = relationship("TreatmentStep", back_populates="disease", cascade="all, delete-orphan")
 

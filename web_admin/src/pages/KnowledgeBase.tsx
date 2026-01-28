@@ -20,6 +20,7 @@ interface Disease {
   symptoms: string;
   cause: string;
   name_en?: string;
+  source?: string;
 }
 
 const KnowledgeBase = () => {
@@ -35,7 +36,8 @@ const KnowledgeBase = () => {
     name_en: '',
     symptoms: '',
     cause: '',
-    prevention: ''
+    prevention: '',
+    source: ''
   });
 
   const fetchDiseases = async () => {
@@ -67,7 +69,7 @@ const KnowledgeBase = () => {
 
   const handleOpenCreate = () => {
     setEditId(null);
-    setFormData({ code: '', name_vi: '', name_en: '', symptoms: '', cause: '', prevention: '' });
+    setFormData({ code: '', name_vi: '', name_en: '', symptoms: '', cause: '', prevention: '', source: '' });
     setOpenDialog(true);
   };
 
@@ -79,7 +81,8 @@ const KnowledgeBase = () => {
       name_en: disease.name_en || '',
       symptoms: disease.symptoms,
       cause: disease.cause,
-      prevention: '' // API hiện tại chưa trả về prevention trong list, cần gọi detail nếu muốn đầy đủ, tạm thời để trống hoặc update model list
+      prevention: '',
+      source: (disease as any).source || '' 
     });
     setOpenDialog(true);
   };
@@ -93,7 +96,8 @@ const KnowledgeBase = () => {
           name_en: formData.name_en,
           symptoms: formData.symptoms,
           cause: formData.cause,
-          prevention: formData.prevention
+          prevention: formData.prevention,
+          source: formData.source
         };
         await adminApi.updateDisease(editId, payload);
       } else {
@@ -227,6 +231,13 @@ const KnowledgeBase = () => {
               rows={2} 
               value={formData.prevention}
               onChange={(e) => setFormData({...formData, prevention: e.target.value})}
+            />
+            <TextField 
+              label="Nguồn tài liệu tham khảo" 
+              fullWidth 
+              value={formData.source}
+              placeholder="VD: Giáo trình Bệnh Gia cầm - ĐH Nông Lâm"
+              onChange={(e) => setFormData({...formData, source: e.target.value})}
             />
           </Box>
         </DialogContent>

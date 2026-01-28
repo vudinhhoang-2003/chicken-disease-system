@@ -6,8 +6,10 @@ from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine
 from app.api.deps import get_current_active_superuser
 from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate
+from app.services.rag_service import get_rag_service
 
 router = APIRouter()
+rag_service = get_rag_service()
 
 # --- EXISTING STATS ENDPOINTS ---
 
@@ -126,10 +128,15 @@ async def create_disease(
         
         for med_in in step_in.medicines:
             med = Medicine(**med_in.dict(), step_id=step.id)
-            db.add(med)
-    
     db.commit()
     db.refresh(disease)
+    
+    # Sync to Vector DB
+    try:
+        rag_service.sync_disease(disease.id)
+    except Exception as e:
+        print(f"Sync error: {e}")
+        
     return disease
 
 @router.put("/diseases/{disease_id}", response_model=DiseaseOut)
@@ -150,6 +157,13 @@ async def update_disease(
         
     db.commit()
     db.refresh(disease)
+    
+    # Sync to Vector DB
+    try:
+        rag_service.sync_disease(disease.id)
+    except Exception as e:
+        print(f"Sync error: {e}")
+        
     return disease
 
 @router.delete("/diseases/{disease_id}")
@@ -163,6 +177,12 @@ async def delete_disease(
     if not disease:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh")
     
+    # Delete from Vector DB
+    try:
+        rag_service.delete_disease_vector(disease_id)
+    except Exception as e:
+        print(f"Delete vector error: {e}")
+
     db.delete(disease) # Cascade delete should handle steps/medicines
     db.commit()
     return {"message": "Đã xóa thành công"}
