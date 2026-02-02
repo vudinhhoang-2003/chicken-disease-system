@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from typing import List
+from sqlalchemy import func, cast, Date, case
+from typing import List, Dict, Any
+from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine, GeneralKnowledge
 from app.api.deps import get_current_active_superuser
@@ -22,18 +23,69 @@ async def get_dashboard_stats(
 ):
     """Lấy số liệu thống kê tổng quan cho Dashboard"""
     
-    # Đếm tổng số bản ghi chẩn đoán
+    # 1. Basic Counts
     total_diagnosis = db.query(DiagnosisLog).count()
     total_detections = db.query(DetectionLog).count()
-    
-    # Đếm số ca có bệnh (ví dụ: disease != 'Healthy')
     sick_cases = db.query(DiagnosisLog).filter(DiagnosisLog.predicted_disease != 'Healthy').count()
     
+    # 2. Daily Stats (Last 7 Days)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=6)
+    
+    daily_query = db.query(
+        cast(DiagnosisLog.created_at, Date).label('date'),
+        func.count(DiagnosisLog.id).label('total'),
+        func.sum(case((DiagnosisLog.predicted_disease != 'Healthy', 1), else_=0)).label('sick')
+    ).filter(
+        DiagnosisLog.created_at >= start_date
+    ).group_by(cast(DiagnosisLog.created_at, Date)).all()
+    
+    # Map query result to list of days
+    daily_stats = []
+    current_day = start_date
+    
+    # Convert query result to dict for easy lookup
+    data_map = {str(r.date): {'total': r.total, 'sick': r.sick or 0} for r in daily_query}
+    
+    while current_day <= end_date:
+        day_str = current_day.strftime('%Y-%m-%d')
+        # Display format: "Mon" or "02/02"
+        display_name = current_day.strftime('%d/%m') 
+        
+        stat = data_map.get(day_str, {'total': 0, 'sick': 0})
+        
+        daily_stats.append({
+            "name": display_name,
+            "visits": stat['total'],
+            "sick": stat['sick']
+        })
+        current_day += timedelta(days=1)
+
+    # 3. Disease Distribution (Pie Chart)
+    # Get top 5 diseases + Others
+    dist_query = db.query(
+        DiagnosisLog.predicted_disease, 
+        func.count(DiagnosisLog.id)
+    ).filter(
+        DiagnosisLog.predicted_disease != 'Healthy'
+    ).group_by(
+        DiagnosisLog.predicted_disease
+    ).order_by(func.count(DiagnosisLog.id).desc()).limit(5).all()
+    
+    # Healthy count
+    healthy_count = total_diagnosis - sick_cases
+    
+    pie_data = [{"name": "Khỏe mạnh", "value": healthy_count}]
+    for disease, count in dist_query:
+        pie_data.append({"name": disease, "value": count})
+
     return {
         "total_diagnosis": total_diagnosis + total_detections,
         "sick_cases": sick_cases,
         "total_detections": total_detections,
-        "total_fecal_analysis": total_diagnosis
+        "total_fecal_analysis": total_diagnosis,
+        "chart_data": daily_stats, # Real daily data
+        "pie_data": pie_data       # Real distribution data
     }
 
 @router.get("/recent-logs")

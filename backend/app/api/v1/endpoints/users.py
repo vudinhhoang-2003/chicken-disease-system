@@ -9,8 +9,11 @@ from app.api import deps
 from app.core import models
 from app.core.database import get_db
 from app.schema.user import UserOut, UserUpdate
+from app.schema.knowledge import GeneralKnowledgeOut
 
 router = APIRouter()
+
+# --- USER PROFILE & STATS ---
 
 @router.get("/me", response_model=UserOut)
 def read_user_me(
@@ -54,10 +57,10 @@ def get_user_stats(
     diag_count = diag_query.count()
     diag_sick = diag_query.filter(models.DiagnosisLog.predicted_disease != 'Healthy').count()
     
-    # Calculate Average Confidence (Accuracy proxy)
+    # Calculate Average Confidence
     avg_conf = db.query(func.avg(models.DiagnosisLog.confidence)).filter(
         models.DiagnosisLog.user_id == current_user.id
-    ).scalar() or 0.0 # Default to 0% if no data
+    ).scalar() or 0.0
     
     # 2. Detection Logs (Flock Check)
     detect_query = db.query(models.DetectionLog).filter(models.DetectionLog.user_id == current_user.id)
@@ -69,3 +72,25 @@ def get_user_stats(
         "sick_cases": diag_sick + detect_sick,
         "accuracy": round(avg_conf * 100, 1)
     }
+
+# --- PUBLIC KNOWLEDGE BROWSING ---
+
+@router.get("/knowledge", response_model=List[GeneralKnowledgeOut])
+def list_knowledge(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 50,
+):
+    """Lấy danh sách kiến thức chăn nuôi (Công khai)"""
+    return db.query(models.GeneralKnowledge).order_by(models.GeneralKnowledge.id.desc()).offset(skip).limit(limit).all()
+
+@router.get("/knowledge/{k_id}", response_model=GeneralKnowledgeOut)
+def get_knowledge_detail(
+    k_id: int,
+    db: Session = Depends(get_db),
+):
+    """Lấy chi tiết bài viết kiến thức"""
+    item = db.query(models.GeneralKnowledge).filter(models.GeneralKnowledge.id == k_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+    return item

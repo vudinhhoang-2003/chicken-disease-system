@@ -90,13 +90,34 @@ class YOLOService:
             healthy_count = 0
             sick_count = 0
             
-            # Process each detection
+            # Process each detection and DRAW custom boxes
+            annotated_image = image.copy()
             for idx, box in enumerate(results[0].boxes):
                 class_id = int(box.cls)
                 class_name = results[0].names[class_id]
                 confidence = float(box.conf)
                 bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
                 
+                # Coords for cv2
+                x1, y1, x2, y2 = map(int, bbox)
+                
+                # Determine color and count
+                is_healthy = "healthy" in class_name.lower()
+                color = (0, 255, 0) if is_healthy else (0, 0, 255) # BGR
+                
+                if is_healthy:
+                    healthy_count += 1
+                else:
+                    sick_count += 1
+
+                # Draw Box
+                cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 3)
+                
+                # Draw Label
+                label = f"{class_name} {confidence:.2f}"
+                cv2.putText(annotated_image, label, (x1, y1 - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
                 detection = {
                     "id": idx + 1,
                     "class": class_name,
@@ -104,21 +125,11 @@ class YOLOService:
                     "bbox": [round(x, 2) for x in bbox]
                 }
                 detections.append(detection)
-                
-                # Count by class
-                if "healthy" in class_name.lower():
-                    healthy_count += 1
-                else:
-                    sick_count += 1
-            
-            # Draw bounding boxes on image
-            annotated_image = results[0].plot()
             
             # Generate alert message
             alert = None
             if sick_count > 0:
-                sick_ids = [d["id"] for d in detections if "sick" in d["class"].lower()]
-                alert = f"⚠️ Phát hiện {sick_count} con gà bất thường (ID: {', '.join(map(str, sick_ids))})"
+                alert = f"⚠️ Phát hiện {sick_count} cá thể có dấu hiệu bất thường. Cần kiểm tra kỹ chuồng trại."
             
             return {
                 "total_chickens": len(detections),

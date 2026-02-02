@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 
 # 1. Medicine Schemas
 class MedicineBase(BaseModel):
@@ -87,7 +88,7 @@ class GeneralKnowledgeOut(GeneralKnowledgeBase):
     id: int
     sync_status: str
     sync_error: Optional[str] = None
-    created_at: Optional[str] = None # Or datetime
+    created_at: Optional[datetime] = None # Changed to datetime
     
     class Config:
         from_attributes = True

@@ -9,6 +9,7 @@ const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState({ total_scans: 0, sick_cases: 0, accuracy: 0 });
+  const [userName, setUserName] = useState('Người dùng');
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('token');
@@ -24,9 +25,19 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
+  const fetchUserProfile = async () => {
+    try {
+      const response = await client.get('/users/me');
+      setUserName(response.data.full_name);
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchStats();
+      fetchUserProfile();
     }, [])
   );
 
@@ -45,7 +56,7 @@ const HomeScreen = ({ navigation }: any) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Xin chào, Admin</Text>
+            <Text style={styles.greeting}>Xin chào, {userName}</Text>
             <Text style={styles.appName}>ChickHealth Dashboard</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
@@ -91,29 +102,6 @@ const HomeScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           ))}
         </View>
-
-        <Text style={styles.sectionTitle}>Cập nhật mới nhất</Text>
-        <TouchableOpacity style={styles.newsCard}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=500&q=60' }} 
-            style={styles.newsImage} 
-          />
-          <View style={styles.newsContent}>
-            <Text style={styles.newsTitle}>Cách phòng bệnh Cầu trùng mùa mưa</Text>
-            <Text style={styles.newsDate}>2 giờ trước</Text>
-          </View>
-        </TouchableOpacity>
-        
-         <TouchableOpacity style={styles.newsCard}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1563205764-89c096414704?auto=format&fit=crop&w=500&q=60' }} 
-            style={styles.newsImage} 
-          />
-          <View style={styles.newsContent}>
-            <Text style={styles.newsTitle}>Giá gà thịt hôm nay tăng nhẹ</Text>
-            <Text style={styles.newsDate}>5 giờ trước</Text>
-          </View>
-        </TouchableOpacity>
 
         <View style={{ height: 30 }} />
       </ScrollView>
@@ -233,34 +221,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: '#999',
-  },
-  newsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 10,
-    alignItems: 'center',
-    elevation: 1,
-  },
-  newsImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-  },
-  newsContent: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  newsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  newsDate: {
     fontSize: 12,
     color: '#999',
   },
