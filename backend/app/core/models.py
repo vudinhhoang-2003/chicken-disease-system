@@ -119,6 +119,10 @@ class Disease(Base):
     prevention = Column(Text) # Phòng bệnh
     source = Column(String, nullable=True) # Nguồn tài liệu tham khảo
     
+    # State Tracking cho Sync Vector DB
+    sync_status = Column(String, default="PENDING") # PENDING, SUCCESS, ERROR
+    sync_error = Column(Text, nullable=True)
+
     treatment_steps = relationship("TreatmentStep", back_populates="disease", cascade="all, delete-orphan")
 
 class TreatmentStep(Base):
@@ -146,3 +150,20 @@ class Medicine(Base):
     reference_source = Column(String, nullable=True)
     
     step = relationship("TreatmentStep", back_populates="medicines")
+
+# 7. General Knowledge (Kiến thức chăn nuôi chung: Chuồng trại, Dinh dưỡng...)
+class GeneralKnowledge(Base):
+    __tablename__ = "general_knowledge"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String, index=True) # VD: Chuồng trại, Dinh dưỡng, Vệ sinh
+    title = Column(String, index=True) # VD: Hướng dẫn làm đệm lót sinh học
+    content = Column(Text)
+    source = Column(String, nullable=True)
+    
+    # State Tracking cho Sync Vector DB
+    sync_status = Column(String, default="PENDING") # PENDING, SUCCESS, ERROR
+    sync_error = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

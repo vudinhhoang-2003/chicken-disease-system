@@ -5,12 +5,12 @@ import base64
 import os
 import uuid
 from typing import Any
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.services.yolo_service import get_yolo_service, YOLOService
 from app.schema.detection import DetectionResponse, ClassificationResponse, DetectionBox
 from app.core.database import get_db
-from app.core.models import DiagnosisLog, DetectionLog, User
+from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep
 from app.config import get_settings
 
 router = APIRouter()
@@ -129,10 +129,22 @@ async def classify_disease(
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
+
+    # Lookup Detailed Info from Knowledge Base
+    disease_detail = None
+    if not results["is_healthy"]:
+        # Find disease in DB matching the English name from AI model (Case-insensitive)
+        disease_info = db.query(Disease).options(
+            joinedload(Disease.treatment_steps).joinedload(TreatmentStep.medicines)
+        ).filter(Disease.name_en.ilike(results["disease"])).first()
+        
+        if disease_info:
+            disease_detail = disease_info
     
     return ClassificationResponse(
         disease=results["disease"],
         confidence=results["confidence"],
         all_probabilities=results["all_probabilities"],
-        is_healthy=results["is_healthy"]
+        is_healthy=results["is_healthy"],
+        disease_detail=disease_detail
     )

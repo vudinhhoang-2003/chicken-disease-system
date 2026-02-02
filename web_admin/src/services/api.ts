@@ -53,6 +53,12 @@ export const adminApi = {
 
     deleteDisease: (id: number) => api.delete(`/admin/diseases/${id}`),
 
+    // General Knowledge (Farming Guide)
+    getGeneralKnowledge: () => api.get('/admin/knowledge'),
+    createGeneralKnowledge: (data: any) => api.post('/admin/knowledge', data),
+    updateGeneralKnowledge: (id: number, data: any) => api.put(`/admin/knowledge/${id}`, data),
+    deleteGeneralKnowledge: (id: number) => api.delete(`/admin/knowledge/${id}`),
+
     // User Management
     getUsers: () => api.get('/admin/users'),
     createUser: (data: any) => api.post('/admin/users', data),

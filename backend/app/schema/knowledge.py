@@ -60,7 +60,34 @@ class DiseaseUpdate(BaseModel):
 
 class DiseaseOut(DiseaseBase):
     id: int
+    sync_status: str
+    sync_error: Optional[str] = None
     treatment_steps: List[TreatmentStepOut] = []
+    
+    class Config:
+        from_attributes = True
+
+# 4. General Knowledge Schemas
+class GeneralKnowledgeBase(BaseModel):
+    category: str
+    title: str
+    content: str
+    source: Optional[str] = None
+
+class GeneralKnowledgeCreate(GeneralKnowledgeBase):
+    pass
+
+class GeneralKnowledgeUpdate(BaseModel):
+    category: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    source: Optional[str] = None
+
+class GeneralKnowledgeOut(GeneralKnowledgeBase):
+    id: int
+    sync_status: str
+    sync_error: Optional[str] = None
+    created_at: Optional[str] = None # Or datetime
     
     class Config:
         from_attributes = True

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 from app.core.database import get_db
-from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine
+from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine, GeneralKnowledge
 from app.api.deps import get_current_active_superuser
-from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate
+from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate, GeneralKnowledgeCreate, GeneralKnowledgeOut, GeneralKnowledgeUpdate
 from app.schema.user import UserCreate, UserUpdate, UserOut
 from app.core.security import get_password_hash
 from app.services.rag_service import get_rag_service
@@ -78,7 +78,81 @@ async def get_recent_logs(
     
     return formatted_logs[:limit]
 
-# --- KNOWLEDGE BASE ENDPOINTS ---
+# --- GENERAL KNOWLEDGE ENDPOINTS ---
+
+@router.get("/knowledge", response_model=List[GeneralKnowledgeOut])
+async def get_general_knowledge(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Lấy danh sách kiến thức chung"""
+    return db.query(GeneralKnowledge).order_by(GeneralKnowledge.id.desc()).offset(skip).limit(limit).all()
+
+@router.post("/knowledge", response_model=GeneralKnowledgeOut)
+async def create_general_knowledge(
+    knowledge_in: GeneralKnowledgeCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Thêm kiến thức mới"""
+    knowledge = GeneralKnowledge(**knowledge_in.dict())
+    knowledge.sync_status = "PENDING"
+    db.add(knowledge)
+    db.commit()
+    db.refresh(knowledge)
+    
+    # Sync in background
+    background_tasks.add_task(rag_service.sync_general_knowledge, knowledge.id)
+    return knowledge
+
+@router.put("/knowledge/{k_id}", response_model=GeneralKnowledgeOut)
+async def update_general_knowledge(
+    k_id: int,
+    knowledge_in: GeneralKnowledgeUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Cập nhật kiến thức"""
+    knowledge = db.query(GeneralKnowledge).filter(GeneralKnowledge.id == k_id).first()
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+        
+    for field, value in knowledge_in.dict(exclude_unset=True).items():
+        setattr(knowledge, field, value)
+    
+    knowledge.sync_status = "PENDING"
+    db.commit()
+    db.refresh(knowledge)
+    
+    # Sync in background
+    background_tasks.add_task(rag_service.sync_general_knowledge, knowledge.id)
+    return knowledge
+
+@router.delete("/knowledge/{k_id}")
+async def delete_general_knowledge(
+    k_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Xóa kiến thức"""
+    knowledge = db.query(GeneralKnowledge).filter(GeneralKnowledge.id == k_id).first()
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
+        
+    try:
+        rag_service.delete_general_knowledge_vector(k_id)
+    except:
+        pass
+        
+    db.delete(knowledge)
+    db.commit()
+    return {"message": "Đã xóa thành công"}
+
+# --- DISEASE KNOWLEDGE BASE ENDPOINTS ---
 
 @router.get("/diseases", response_model=List[DiseaseOut])
 async def get_diseases(
@@ -88,7 +162,7 @@ async def get_diseases(
     current_user: User = Depends(get_current_active_superuser)
 ):
     """Lấy danh sách các bệnh"""
-    diseases = db.query(Disease).offset(skip).limit(limit).all()
+    diseases = db.query(Disease).order_by(Disease.id.desc()).offset(skip).limit(limit).all()
     return diseases
 
 @router.get("/diseases/{disease_id}", response_model=DiseaseOut)
@@ -106,6 +180,7 @@ async def get_disease(
 @router.post("/diseases", response_model=DiseaseOut)
 async def create_disease(
     disease_in: DiseaseCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
@@ -118,6 +193,7 @@ async def create_disease(
     # 1. Create Disease
     disease_data = disease_in.dict(exclude={"treatment_steps"})
     disease = Disease(**disease_data)
+    disease.sync_status = "PENDING" # Mark as pending
     db.add(disease)
     db.flush() # Flush to get disease.id
 
@@ -130,14 +206,13 @@ async def create_disease(
         
         for med_in in step_in.medicines:
             med = Medicine(**med_in.dict(), step_id=step.id)
+            db.add(med)
+            
     db.commit()
     db.refresh(disease)
     
-    # Sync to Vector DB
-    try:
-        rag_service.sync_disease(disease.id)
-    except Exception as e:
-        print(f"Sync error: {e}")
+    # Sync to Vector DB in Background
+    background_tasks.add_task(rag_service.sync_disease, disease.id)
         
     return disease
 
@@ -145,6 +220,7 @@ async def create_disease(
 async def update_disease(
     disease_id: int,
     disease_in: DiseaseUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
@@ -156,15 +232,16 @@ async def update_disease(
     update_data = disease_in.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(disease, field, value)
+    
+    # Reset status to PENDING when updated
+    disease.sync_status = "PENDING"
+    disease.sync_error = None
         
     db.commit()
     db.refresh(disease)
     
-    # Sync to Vector DB
-    try:
-        rag_service.sync_disease(disease.id)
-    except Exception as e:
-        print(f"Sync error: {e}")
+    # Sync to Vector DB in Background
+    background_tasks.add_task(rag_service.sync_disease, disease.id)
         
     return disease
 

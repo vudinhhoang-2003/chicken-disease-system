@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict
+from app.schema.knowledge import DiseaseOut
 
 class DetectionBox(BaseModel):
     id: int
@@ -23,3 +24,4 @@ class ClassificationResponse(BaseModel):
     is_healthy: bool
     description: Optional[str] = None
     recommendation: Optional[str] = None
+    disease_detail: Optional[DiseaseOut] = None # Thông tin chi tiết từ DB (thuốc, phác đồ...)

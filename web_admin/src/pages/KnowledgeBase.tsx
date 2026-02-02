@@ -3,13 +3,17 @@ import {
   Typography, Paper, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, Button, 
   IconButton, Box, CircularProgress, Dialog,
-  DialogTitle, DialogContent, TextField, DialogActions
+  DialogTitle, DialogContent, TextField, DialogActions,
+  Chip, Tooltip
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Delete as DeleteIcon, 
   Edit as EditIcon,
-  LocalPharmacy as MedicineIcon
+  CheckCircle as SuccessIcon,
+  Error as ErrorIcon,
+  HourglassEmpty as PendingIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { adminApi } from '../services/api';
 
@@ -19,8 +23,11 @@ interface Disease {
   name_vi: string;
   symptoms: string;
   cause: string;
+  prevention?: string;
   name_en?: string;
   source?: string;
+  sync_status: 'PENDING' | 'SUCCESS' | 'ERROR';
+  sync_error?: string;
 }
 
 const KnowledgeBase = () => {
@@ -81,8 +88,8 @@ const KnowledgeBase = () => {
       name_en: disease.name_en || '',
       symptoms: disease.symptoms,
       cause: disease.cause,
-      prevention: '',
-      source: (disease as any).source || '' 
+      prevention: disease.prevention || '',
+      source: disease.source || '' 
     });
     setOpenDialog(true);
   };
@@ -117,6 +124,48 @@ const KnowledgeBase = () => {
     }
   };
 
+  const renderSyncStatus = (disease: Disease) => {
+    switch (disease.sync_status) {
+      case 'SUCCESS':
+        return (
+          <Tooltip title="Đã đồng bộ với Vector DB">
+            <Chip 
+              icon={<SuccessIcon />} 
+              label="Đã đồng bộ" 
+              color="success" 
+              size="small" 
+              variant="outlined" 
+            />
+          </Tooltip>
+        );
+      case 'ERROR':
+        return (
+          <Tooltip title={disease.sync_error || "Lỗi đồng bộ không xác định"}>
+            <Chip 
+              icon={<ErrorIcon />} 
+              label="Lỗi" 
+              color="error" 
+              size="small" 
+              variant="outlined" 
+            />
+          </Tooltip>
+        );
+      case 'PENDING':
+      default:
+        return (
+          <Tooltip title="Đang trong hàng đợi đồng bộ...">
+            <Chip 
+              icon={<PendingIcon />} 
+              label="Đang xử lý" 
+              color="warning" 
+              size="small" 
+              variant="outlined" 
+            />
+          </Tooltip>
+        );
+    }
+  };
+
   if (loading) {
      return <Box p={5} display="flex" justifyContent="center"><CircularProgress /></Box>;
   }
@@ -124,7 +173,12 @@ const KnowledgeBase = () => {
   return (
     <Paper sx={{ p: 2 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5">Cơ sở dữ liệu bệnh học</Typography>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Typography variant="h5">Cơ sở dữ liệu bệnh học</Typography>
+          <IconButton size="small" onClick={fetchDiseases} title="Làm mới">
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        </Box>
         <Button 
           variant="contained" 
           startIcon={<AddIcon />}
@@ -141,7 +195,7 @@ const KnowledgeBase = () => {
               <TableCell>Mã</TableCell>
               <TableCell>Tên bệnh (TV)</TableCell>
               <TableCell>Triệu chứng sơ lược</TableCell>
-              <TableCell>Nguyên nhân</TableCell>
+              <TableCell>Đồng bộ AI</TableCell>
               <TableCell align="right">Hành động</TableCell>
             </TableRow>
           </TableHead>
@@ -156,8 +210,8 @@ const KnowledgeBase = () => {
                 <TableCell sx={{ maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {disease.symptoms}
                 </TableCell>
-                <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {disease.cause}
+                <TableCell>
+                  {renderSyncStatus(disease)}
                 </TableCell>
                 <TableCell align="right">
                   <IconButton size="small" color="primary" onClick={() => handleOpenEdit(disease)}>

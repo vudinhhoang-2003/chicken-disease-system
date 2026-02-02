@@ -82,39 +82,62 @@ class RAGService:
 
     def sync_disease(self, disease_id: int):
         """Sync a disease from SQL to Vector DB using Local Embeddings"""
-        if not self.chroma_client or not self.embeddings:
-            logger.error("ChromaDB or Embeddings not initialized")
-            return
-
         db = SessionLocal()
+        disease = None
         try:
-            disease = db.query(models.Disease).options(
-                joinedload(models.Disease.treatment_steps).joinedload(models.TreatmentStep.medicines)
-            ).filter(models.Disease.id == disease_id).first()
-            
+            # 1. Fetch the disease
+            disease = db.query(models.Disease).filter(models.Disease.id == disease_id).first()
             if not disease:
+                logger.error(f"Disease ID {disease_id} not found for sync")
                 return
 
-            text_content = self._format_disease_text(disease)
+            # 2. Check if components are ready
+            if not self.chroma_client or not self.embeddings:
+                raise Exception("Hệ thống Vector DB hoặc Embedding chưa khởi tạo thành công.")
+
+            # 3. Reload with relations for formatting
+            disease_full = db.query(models.Disease).options(
+                joinedload(models.Disease.treatment_steps).joinedload(models.TreatmentStep.medicines)
+            ).filter(models.Disease.id == disease_id).first()
+
+            text_content = self._format_disease_text(disease_full)
             
-            # Using langchain embeddings to generate vector
+            # 4. Generate vector
             vector = self.embeddings.embed_query(text_content)
             
-            # Upsert into ChromaDB
+            # 5. Upsert into ChromaDB
+            # Use 'dis_' prefix to avoid collision
+            vector_id = f"dis_{disease.id}"
+            
             self.collection.upsert(
-                ids=[str(disease.id)],
+                ids=[vector_id],
                 embeddings=[vector],
                 documents=[text_content],
                 metadatas=[{
                     "id": disease.id,
+                    "type": "disease",
                     "code": disease.code,
                     "name": disease.name_vi,
                     "source": disease.source or "Chưa rõ"
                 }]
             )
+            
+            # 6. Update status to SUCCESS
+            disease.sync_status = "SUCCESS"
+            disease.sync_error = None
+            db.commit()
             logger.info(f"✨ Synced {disease.name_vi} to Vector DB (Local)")
+
         except Exception as e:
-            logger.error(f"❌ Sync error: {e}")
+            error_msg = str(e)
+            logger.error(f"❌ Sync error: {error_msg}")
+            if disease:
+                try:
+                    disease.sync_status = "ERROR"
+                    disease.sync_error = error_msg
+                    db.commit()
+                except Exception as db_err:
+                    logger.error(f"Could not save sync error to DB: {db_err}")
         finally:
             db.close()
 
@@ -122,8 +145,74 @@ class RAGService:
         """Remove a disease from Vector DB"""
         if self.collection:
             try:
+                # Try deleting with prefix first
+                self.collection.delete(ids=[f"dis_{disease_id}"])
+                # Also try deleting old ID format (int string) just in case
                 self.collection.delete(ids=[str(disease_id)])
                 logger.info(f"🗑️ Deleted disease ID {disease_id} from Vector DB")
+            except Exception as e:
+                logger.error(f"❌ Delete vector error: {e}")
+
+    def _format_general_knowledge_text(self, knowledge: models.GeneralKnowledge) -> str:
+        text = f"KIẾN THỨC CHĂN NUÔI: {knowledge.category}\n"
+        text += f"CHỦ ĐỀ: {knowledge.title}\n"
+        if knowledge.source:
+            text += f"NGUỒN: {knowledge.source}\n"
+        text += f"NỘI DUNG:\n{knowledge.content}"
+        return text
+
+    def sync_general_knowledge(self, knowledge_id: int):
+        """Sync general knowledge to Vector DB"""
+        db = SessionLocal()
+        knowledge = None
+        try:
+            knowledge = db.query(models.GeneralKnowledge).filter(models.GeneralKnowledge.id == knowledge_id).first()
+            if not knowledge:
+                return
+
+            if not self.chroma_client or not self.embeddings:
+                raise Exception("Hệ thống Vector DB chưa sẵn sàng.")
+
+            text_content = self._format_general_knowledge_text(knowledge)
+            vector = self.embeddings.embed_query(text_content)
+            
+            vector_id = f"gen_{knowledge.id}"
+            
+            self.collection.upsert(
+                ids=[vector_id],
+                embeddings=[vector],
+                documents=[text_content],
+                metadatas=[{
+                    "id": knowledge.id,
+                    "type": "general",
+                    "category": knowledge.category,
+                    "title": knowledge.title,
+                    "source": knowledge.source or "Chưa rõ"
+                }]
+            )
+            
+            knowledge.sync_status = "SUCCESS"
+            knowledge.sync_error = None
+            db.commit()
+            logger.info(f"✨ Synced Knowledge '{knowledge.title}' to Vector DB")
+
+        except Exception as e:
+            logger.error(f"❌ Sync Knowledge Error: {e}")
+            if knowledge:
+                try:
+                    knowledge.sync_status = "ERROR"
+                    knowledge.sync_error = str(e)
+                    db.commit()
+                except:
+                    pass
+        finally:
+            db.close()
+
+    def delete_general_knowledge_vector(self, knowledge_id: int):
+        if self.collection:
+            try:
+                self.collection.delete(ids=[f"gen_{knowledge_id}"])
+                logger.info(f"🗑️ Deleted knowledge ID {knowledge_id} from Vector DB")
             except Exception as e:
                 logger.error(f"❌ Delete vector error: {e}")
 
