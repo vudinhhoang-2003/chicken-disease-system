@@ -10,6 +10,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
+    phone = Column(String, nullable=True, index=True) # Số điện thoại
     hashed_password = Column(String)
     role = Column(String, default="farmer") # farmer, vet, admin
     is_active = Column(Boolean, default=True)

@@ -14,6 +14,7 @@ interface User {
   id: number;
   email: string;
   full_name: string;
+  phone: string;
   is_active: boolean;
   is_superuser: boolean;
   created_at: string;
@@ -31,6 +32,7 @@ const UsersPage = () => {
     email: '',
     password: '',
     full_name: '',
+    phone: '',
     is_active: true,
     is_superuser: false
   });
@@ -53,13 +55,14 @@ const UsersPage = () => {
   }, []);
 
   const handleOpenDialog = (user?: User) => {
-    setShowPassword(false); // Reset show password
+    setShowPassword(false);
     if (user) {
       setEditingUser(user);
       setFormData({
         email: user.email,
-        password: '', // Không hiển thị password cũ
+        password: '', 
         full_name: user.full_name || '',
+        phone: user.phone || '',
         is_active: user.is_active,
         is_superuser: user.is_superuser
       });
@@ -69,6 +72,7 @@ const UsersPage = () => {
         email: '',
         password: '',
         full_name: '',
+        phone: '',
         is_active: true,
         is_superuser: false
       });
@@ -84,13 +88,11 @@ const UsersPage = () => {
   const handleSubmit = async () => {
     try {
       if (editingUser) {
-        // Update
         const updateData: any = { ...formData };
-        if (!updateData.password) delete updateData.password; // Không gửi password nếu để trống
+        if (!updateData.password) delete updateData.password;
         await adminApi.updateUser(editingUser.id, updateData);
         setNotification({ message: 'Cập nhật thành công', type: 'success' });
       } else {
-        // Create
         if (!formData.email || !formData.password) {
             setNotification({ message: 'Email và mật khẩu là bắt buộc', type: 'error' });
             return;
@@ -101,10 +103,7 @@ const UsersPage = () => {
       fetchUsers();
       handleCloseDialog();
     } catch (error: any) {
-      setNotification({ 
-        message: error.response?.data?.detail || 'Có lỗi xảy ra', 
-        type: 'error' 
-      });
+      setNotification({ message: error.response?.data?.detail || 'Có lỗi xảy ra', type: 'error' });
     }
   };
 
@@ -115,35 +114,18 @@ const UsersPage = () => {
         setNotification({ message: 'Đã xóa người dùng', type: 'success' });
         fetchUsers();
       } catch (error: any) {
-        setNotification({ 
-            message: error.response?.data?.detail || 'Lỗi khi xóa', 
-            type: 'error' 
-        });
+        setNotification({ message: error.response?.data?.detail || 'Lỗi khi xóa', type: 'error' });
       }
     }
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" p={5}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (loading) return <Box display="flex" justifyContent="center" p={5}><CircularProgress /></Box>;
 
   return (
     <Paper sx={{ p: 2 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5">
-          Quản lý Người dùng
-        </Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Thêm người dùng
-        </Button>
+        <Typography variant="h5">Quản lý Người dùng</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}> Thêm người dùng </Button>
       </Box>
 
       <TableContainer>
@@ -153,6 +135,7 @@ const UsersPage = () => {
               <TableCell>Avatar</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Họ tên</TableCell>
+              <TableCell>Điện thoại</TableCell>
               <TableCell>Vai trò</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell>Hành động</TableCell>
@@ -161,32 +144,15 @@ const UsersPage = () => {
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
-                <TableCell>
-                  <Avatar>{user.full_name ? user.full_name.charAt(0) : 'U'}</Avatar>
-                </TableCell>
+                <TableCell><Avatar>{user.full_name ? user.full_name.charAt(0) : 'U'}</Avatar></TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>{user.full_name || 'Chưa cập nhật'}</TableCell>
+                <TableCell>{user.phone || 'N/A'}</TableCell>
+                <TableCell><Chip label={user.is_superuser ? 'Admin' : 'Nông dân'} color={user.is_superuser ? 'secondary' : 'default'} size="small" /></TableCell>
+                <TableCell><Chip label={user.is_active ? 'Hoạt động' : 'Bị khóa'} color={user.is_active ? 'success' : 'error'} size="small" /></TableCell>
                 <TableCell>
-                  <Chip 
-                    label={user.is_superuser ? 'Admin' : 'Nông dân'} 
-                    color={user.is_superuser ? 'secondary' : 'default'} 
-                    size="small" 
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={user.is_active ? 'Hoạt động' : 'Bị khóa'} 
-                    color={user.is_active ? 'success' : 'error'} 
-                    size="small" 
-                  />
-                </TableCell>
-                <TableCell>
-                  <IconButton color="primary" onClick={() => handleOpenDialog(user)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton color="error" onClick={() => handleDelete(user.id)}>
-                    <DeleteIcon />
-                  </IconButton>
+                  <IconButton color="primary" onClick={() => handleOpenDialog(user)}><EditIcon /></IconButton>
+                  <IconButton color="error" onClick={() => handleDelete(user.id)}><DeleteIcon /></IconButton>
                 </TableCell>
               </TableRow>
             ))}
@@ -194,67 +160,30 @@ const UsersPage = () => {
         </Table>
       </TableContainer>
 
-      {/* Create/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{editingUser ? 'Cập nhật người dùng' : 'Thêm người dùng mới'}</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Email"
-            type="email"
-            fullWidth
-            variant="outlined"
-            value={formData.email}
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
-            disabled={!!editingUser} // Không cho sửa email khi edit
-          />
+          <TextField autoFocus margin="dense" label="Email" type="email" fullWidth variant="outlined" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} disabled={!!editingUser} />
           <TextField
             margin="dense"
             label={editingUser ? "Mật khẩu mới (Để trống nếu không đổi)" : "Mật khẩu"}
             type={showPassword ? "text" : "password"}
-            fullWidth
-            variant="outlined"
+            fullWidth variant="outlined"
             value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                    {showPassword ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
+                  <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">{showPassword ? <VisibilityOff /> : <Visibility />}</IconButton>
                 </InputAdornment>
               ),
             }}
           />
-          <TextField
-            margin="dense"
-            label="Họ và tên"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={formData.full_name}
-            onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-          />
+          <TextField margin="dense" label="Họ và tên" type="text" fullWidth variant="outlined" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} />
+          <TextField margin="dense" label="Số điện thoại" type="tel" fullWidth variant="outlined" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
           <Box mt={2}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                />
-              }
-              label="Trạng thái hoạt động"
-            />
-             <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.is_superuser}
-                  onChange={(e) => setFormData({...formData, is_superuser: e.target.checked})}
-                />
-              }
-              label="Quyền Admin"
-            />
+            <FormControlLabel control={<Switch checked={formData.is_active} onChange={(e) => setFormData({...formData, is_active: e.target.checked})} />} label="Trạng thái hoạt động" />
+            <FormControlLabel control={<Switch checked={formData.is_superuser} onChange={(e) => setFormData({...formData, is_superuser: e.target.checked})} />} label="Quyền Admin" />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -263,16 +192,8 @@ const UsersPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Notification */}
-      <Snackbar 
-        open={!!notification} 
-        autoHideDuration={4000} 
-        onClose={() => setNotification(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert severity={notification?.type} onClose={() => setNotification(null)}>
-            {notification?.message}
-        </Alert>
+      <Snackbar open={!!notification} autoHideDuration={4000} onClose={() => setNotification(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert severity={notification?.type} onClose={() => setNotification(null)}>{notification?.message}</Alert>
       </Snackbar>
     </Paper>
   );

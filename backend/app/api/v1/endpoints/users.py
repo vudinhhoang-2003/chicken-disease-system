@@ -2,7 +2,7 @@ from typing import Any, List
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic.networks import EmailStr
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app.api import deps
@@ -19,9 +19,6 @@ router = APIRouter()
 def read_user_me(
     current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """
-    Get current user.
-    """
     return current_user
 
 @router.put("/me", response_model=UserOut)
@@ -31,9 +28,6 @@ def update_user_me(
     user_in: UserUpdate,
     current_user: models.User = Depends(deps.get_current_active_user),
 ) -> Any:
-    """
-    Update own user.
-    """
     current_user_data = jsonable_encoder(current_user)
     user_in_data = user_in.dict(exclude_unset=True)
     for field in current_user_data:
@@ -49,9 +43,6 @@ def get_user_stats(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(deps.get_current_active_user)
 ):
-    """
-    Get statistics for the current user.
-    """
     diag_query = db.query(models.DiagnosisLog).filter(models.DiagnosisLog.user_id == current_user.id)
     diag_count = diag_query.count()
     diag_sick = diag_query.filter(models.DiagnosisLog.predicted_disease != 'Healthy').count()
@@ -67,6 +58,59 @@ def get_user_stats(
         "accuracy": round(avg_conf * 100, 1)
     }
 
+@router.get("/me/history")
+def get_user_history(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(deps.get_current_active_user),
+    limit: int = 50
+):
+    """Lấy danh sách lịch sử chẩn đoán của chính user đó kèm chi tiết bệnh"""
+    diagnosis_logs = db.query(models.DiagnosisLog).filter(
+        models.DiagnosisLog.user_id == current_user.id
+    ).order_by(models.DiagnosisLog.created_at.desc()).limit(limit).all()
+    
+    formatted_logs = []
+    for log in diagnosis_logs:
+        disease_detail = None
+        if log.predicted_disease.lower() != "healthy":
+            disease_detail = db.query(models.Disease).options(
+                joinedload(models.Disease.treatment_steps).joinedload(models.TreatmentStep.medicines)
+            ).filter(models.Disease.name_en.ilike(log.predicted_disease)).first()
+
+        formatted_logs.append({
+            "id": log.id,
+            "type": "diagnosis",
+            "image_url": f"/uploads/{log.image_path}",
+            "result": log.predicted_disease,
+            "confidence": log.confidence,
+            "created_at": log.created_at,
+            "status": "Healthy" if log.predicted_disease.lower() == "healthy" else "Sick",
+            "disease_detail": disease_detail
+        })
+        
+    detection_logs = db.query(models.DetectionLog).filter(
+        models.DetectionLog.user_id == current_user.id
+    ).order_by(models.DetectionLog.created_at.desc()).limit(limit).all()
+    
+    for log in detection_logs:
+        formatted_logs.append({
+            "id": log.id,
+            "type": "detection",
+            "image_url": f"/uploads/{log.annotated_image_path}",
+            "result": f"{log.sick_count} gà bệnh / {log.total_chickens} tổng",
+            "confidence": 0.0,
+            "created_at": log.created_at,
+            "status": "Sick" if log.sick_count > 0 else "Healthy",
+            "stats": {
+                "total": log.total_chickens,
+                "healthy": log.healthy_count,
+                "sick": log.sick_count
+            }
+        })
+    
+    formatted_logs.sort(key=lambda x: x["created_at"], reverse=True)
+    return formatted_logs[:limit]
+
 # --- PUBLIC KNOWLEDGE BROWSING ---
 
 @router.get("/knowledge", response_model=List[GeneralKnowledgeOut])
@@ -75,7 +119,6 @@ def list_knowledge(
     skip: int = 0,
     limit: int = 50,
 ):
-    """Lấy danh sách kiến thức chăn nuôi (Công khai)"""
     return db.query(models.GeneralKnowledge).order_by(models.GeneralKnowledge.id.desc()).offset(skip).limit(limit).all()
 
 @router.get("/knowledge/{k_id}", response_model=GeneralKnowledgeOut)
@@ -83,7 +126,6 @@ def get_knowledge_detail(
     k_id: int,
     db: Session = Depends(get_db),
 ):
-    """Lấy chi tiết bài viết kiến thức"""
     item = db.query(models.GeneralKnowledge).filter(models.GeneralKnowledge.id == k_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")

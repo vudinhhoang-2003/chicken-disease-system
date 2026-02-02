@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.models import User
 from app.config import get_settings
 from pydantic import BaseModel
+from typing import Optional
 
 settings = get_settings()
 router = APIRouter()
@@ -17,6 +18,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str
+    phone: Optional[str] = None
     role: str = "farmer" # farmer, vet, admin
 
 class Token(BaseModel):
@@ -68,6 +70,7 @@ def register_user(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
         full_name=user_in.full_name,
+        phone=user_in.phone,
         role=user_in.role,
     )
     db.add(user)

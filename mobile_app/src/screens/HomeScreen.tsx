@@ -46,6 +46,7 @@ const HomeScreen = ({ navigation }: any) => {
     { title: 'Kiểm tra đàn', subtitle: 'Phát hiện gà ốm', icon: 'camera-burst', screen: 'Detect', color: '#2196f3' },
     { title: 'Hỏi đáp AI', subtitle: 'Trợ lý ảo 24/7', icon: 'robot', screen: 'Chat', color: '#00bcd4' },
     { title: 'Kiến thức', subtitle: 'Cẩm nang chăn nuôi', icon: 'book-open-variant', screen: 'Knowledge', color: '#ff9800' },
+    { title: 'Nhật ký sức khỏe', subtitle: 'Xem lại lịch sử', icon: 'history', screen: 'History', color: '#673ab7', fullWidth: true },
   ];
 
   return (
@@ -90,15 +91,17 @@ const HomeScreen = ({ navigation }: any) => {
           {menuItems.map((item, index) => (
             <TouchableOpacity 
               key={index} 
-              style={styles.card}
+              style={[styles.card, item.fullWidth && { width: '100%', flexDirection: 'row', aspectRatio: undefined, height: 80 }]}
               onPress={() => navigation.navigate(item.screen)}
               activeOpacity={0.9}
             >
-              <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }]}>
-                <Icon name={item.icon} size={32} color={item.color} />
+              <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }, item.fullWidth && { marginBottom: 0, marginRight: 15 }]}>
+                <Icon name={item.icon} size={item.fullWidth ? 28 : 32} color={item.color} />
               </View>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+              <View>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>

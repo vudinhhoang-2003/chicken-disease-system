@@ -100,6 +100,13 @@ const LoginScreen = ({ navigation }: any) => {
         <TouchableOpacity style={styles.forgotPassword}>
           <Text style={styles.forgotText}>Quên mật khẩu?</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.registerLink} 
+          onPress={() => navigation.navigate('Register')}
+        >
+          <Text style={styles.registerLinkLabel}>Bạn chưa có tài khoản? <Text style={styles.registerLinkHighlight}>Đăng ký ngay</Text></Text>
+        </TouchableOpacity>
       </View>
       
       <View style={styles.footer}>
@@ -192,6 +199,18 @@ const styles = StyleSheet.create({
   forgotText: {
     color: '#7f8c8d',
     fontSize: 14,
+  },
+  registerLink: {
+    alignItems: 'center',
+    marginTop: 25,
+  },
+  registerLinkLabel: {
+    color: '#7f8c8d',
+    fontSize: 14,
+  },
+  registerLinkHighlight: {
+    color: '#2e7d32',
+    fontWeight: 'bold',
   },
   footer: {
     position: 'absolute',
