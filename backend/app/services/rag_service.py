@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional, Dict
 import chromadb
 from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import SystemMessage, HumanMessage
 from sqlalchemy.orm import joinedload
@@ -9,32 +10,20 @@ from sqlalchemy.orm import joinedload
 from app.config import get_settings
 from app.core import models
 from app.core.database import SessionLocal
+from app.services.usage_service import usage_service
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class RAGService:
-    """Service for RAG using Local HuggingFace Embeddings and Groq LLM"""
+    """Service for RAG using Local HuggingFace Embeddings and Dynamic LLM Provider"""
 
     def __init__(self):
         self.settings = get_settings()
+        self.llm = None
+        self.custom_system_prompt = None
+        self._initialize_llm()
         
-        # 1. Initialize Groq LLM
-        if self.settings.groq_api_key:
-            try:
-                self.llm = ChatGroq(
-                    groq_api_key=self.settings.groq_api_key,
-                    model_name=self.settings.llm_model,
-                    temperature=0.2
-                )
-                logger.info(f"✅ Groq LLM initialized with model: {self.settings.llm_model}")
-            except Exception as e:
-                logger.error(f"❌ Failed to initialize Groq LLM: {e}")
-                self.llm = None
-        else:
-            logger.warning("⚠️ GROQ_API_KEY not found. LLM will not be available.")
-            self.llm = None
-
         # 2. Initialize LOCAL Embeddings (HuggingFace)
         try:
             logger.info("📡 Loading Local Embedding Model (paraphrase-multilingual-MiniLM-L12-v2)...")
@@ -56,7 +45,6 @@ class RAGService:
                     anonymized_telemetry=False
                 )
             )
-            # Ensure heartbeat to check connection
             self.chroma_client.heartbeat()
             self.collection = self.chroma_client.get_or_create_collection(name="chicken_knowledge")
             logger.info("✅ Connected to ChromaDB")
@@ -64,8 +52,42 @@ class RAGService:
             logger.error(f"❌ Failed to connect to ChromaDB: {e}")
             self.chroma_client = None
 
+    def _initialize_llm(self):
+        """Initialize LLM with dynamic settings from Database"""
+        db = SessionLocal()
+        try:
+            # Lấy toàn bộ settings liên quan đến AI
+            all_settings = db.query(models.Setting).filter(models.Setting.key.like("ai_%")).all()
+            settings_dict = {s.key: s.value for s in all_settings}
+            
+            provider = settings_dict.get("ai_provider", "groq")
+            model_name = settings_dict.get("ai_model", self.settings.llm_model)
+            temperature = float(settings_dict.get("ai_temperature", 0.2))
+            
+            if provider == "groq":
+                api_key = settings_dict.get("ai_groq_key", self.settings.groq_api_key)
+                if api_key:
+                    self.llm = ChatGroq(groq_api_key=api_key, model_name=model_name, temperature=temperature)
+                    logger.info(f"✅ AI Initialized: Groq ({model_name})")
+                else:
+                    self.llm = None
+            elif provider == "gemini":
+                api_key = settings_dict.get("ai_gemini_key", self.settings.google_api_key)
+                if api_key:
+                    self.llm = ChatGoogleGenerativeAI(google_api_key=api_key, model=model_name, temperature=temperature)
+                    logger.info(f"✅ AI Initialized: Gemini ({model_name})")
+                else:
+                    self.llm = None
+            
+            self.custom_system_prompt = settings_dict.get("ai_system_prompt", None)
+
+        except Exception as e:
+            logger.error(f"❌ LLM Dynamic Init Error: {e}")
+            self.llm = None
+        finally:
+            db.close()
+
     def _format_disease_text(self, disease: models.Disease) -> str:
-        """Helper to format disease info into a structured document"""
         text = f"BỆNH: {disease.name_vi} ({disease.name_en})\n"
         if disease.source:
             text += f"NGUỒN TÀI LIỆU: {disease.source}\n"
@@ -86,191 +108,125 @@ class RAGService:
         return text
 
     def sync_disease(self, disease_id: int):
-        """Sync a disease from SQL to Vector DB using Local Embeddings"""
         db = SessionLocal()
         disease = None
         try:
-            # 1. Fetch the disease
             disease = db.query(models.Disease).filter(models.Disease.id == disease_id).first()
-            if not disease:
-                logger.error(f"Disease ID {disease_id} not found for sync")
-                return
+            if not disease: return
+            if not self.chroma_client or not self.embeddings: raise Exception("Vector DB not ready")
 
-            # 2. Check if components are ready
-            if not self.chroma_client or not self.embeddings:
-                raise Exception("Hệ thống Vector DB hoặc Embedding chưa khởi tạo thành công.")
-
-            # 3. Reload with relations for formatting
             disease_full = db.query(models.Disease).options(
                 joinedload(models.Disease.treatment_steps).joinedload(models.TreatmentStep.medicines)
             ).filter(models.Disease.id == disease_id).first()
 
             text_content = self._format_disease_text(disease_full)
-            
-            # 4. Generate vector
             vector = self.embeddings.embed_query(text_content)
-            
-            # 5. Upsert into ChromaDB
-            # Use 'dis_' prefix to avoid collision
             vector_id = f"dis_{disease.id}"
             
             self.collection.upsert(
                 ids=[vector_id],
                 embeddings=[vector],
                 documents=[text_content],
-                metadatas=[{
-                    "id": disease.id,
-                    "type": "disease",
-                    "code": disease.code,
-                    "name": disease.name_vi,
-                    "source": disease.source or "Chưa rõ"
-                }]
+                metadatas=[{"id": disease.id, "type": "disease", "code": disease.code, "name": disease.name_vi}]
             )
-            
-            # 6. Update status to SUCCESS
-            disease.sync_status = "SUCCESS"
-            disease.sync_error = None
+            disease.sync_status = "SUCCESS"; disease.sync_error = None
             db.commit()
-            logger.info(f"✨ Synced {disease.name_vi} to Vector DB (Local)")
-
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"❌ Sync error: {error_msg}")
             if disease:
-                try:
-                    disease.sync_status = "ERROR"
-                    disease.sync_error = error_msg
-                    db.commit()
-                except Exception as db_err:
-                    logger.error(f"Could not save sync error to DB: {db_err}")
-        finally:
-            db.close()
+                disease.sync_status = "ERROR"; disease.sync_error = str(e)
+                db.commit()
+        finally: db.close()
 
     def delete_disease_vector(self, disease_id: int):
-        """Remove a disease from Vector DB"""
         if self.collection:
             try:
-                # Try deleting with prefix first
                 self.collection.delete(ids=[f"dis_{disease_id}"])
-                # Also try deleting old ID format (int string) just in case
                 self.collection.delete(ids=[str(disease_id)])
-                logger.info(f"🗑️ Deleted disease ID {disease_id} from Vector DB")
-            except Exception as e:
-                logger.error(f"❌ Delete vector error: {e}")
+            except: pass
 
     def _format_general_knowledge_text(self, knowledge: models.GeneralKnowledge) -> str:
-        text = f"KIẾN THỨC CHĂN NUÔI: {knowledge.category}\n"
-        text += f"CHỦ ĐỀ: {knowledge.title}\n"
-        if knowledge.source:
-            text += f"NGUỒN: {knowledge.source}\n"
+        text = f"KIẾN THỨC CHĂN NUÔI: {knowledge.category}\nCHỦ ĐỀ: {knowledge.title}\n"
+        if knowledge.source: text += f"NGUỒN: {knowledge.source}\n"
         text += f"NỘI DUNG:\n{knowledge.content}"
         return text
 
     def sync_general_knowledge(self, knowledge_id: int):
-        """Sync general knowledge to Vector DB"""
         db = SessionLocal()
         knowledge = None
         try:
             knowledge = db.query(models.GeneralKnowledge).filter(models.GeneralKnowledge.id == knowledge_id).first()
-            if not knowledge:
-                return
-
-            if not self.chroma_client or not self.embeddings:
-                raise Exception("Hệ thống Vector DB chưa sẵn sàng.")
-
+            if not knowledge or not self.chroma_client or not self.embeddings: return
             text_content = self._format_general_knowledge_text(knowledge)
             vector = self.embeddings.embed_query(text_content)
-            
-            vector_id = f"gen_{knowledge.id}"
-            
             self.collection.upsert(
-                ids=[vector_id],
+                ids=[f"gen_{knowledge.id}"],
                 embeddings=[vector],
                 documents=[text_content],
-                metadatas=[{
-                    "id": knowledge.id,
-                    "type": "general",
-                    "category": knowledge.category,
-                    "title": knowledge.title,
-                    "source": knowledge.source or "Chưa rõ"
-                }]
+                metadatas=[{"id": knowledge.id, "type": "general", "title": knowledge.title}]
             )
-            
-            knowledge.sync_status = "SUCCESS"
-            knowledge.sync_error = None
+            knowledge.sync_status = "SUCCESS"; knowledge.sync_error = None
             db.commit()
-            logger.info(f"✨ Synced Knowledge '{knowledge.title}' to Vector DB")
-
         except Exception as e:
-            logger.error(f"❌ Sync Knowledge Error: {e}")
             if knowledge:
-                try:
-                    knowledge.sync_status = "ERROR"
-                    knowledge.sync_error = str(e)
-                    db.commit()
-                except:
-                    pass
-        finally:
-            db.close()
+                knowledge.sync_status = "ERROR"; knowledge.sync_error = str(e)
+                db.commit()
+        finally: db.close()
 
     def delete_general_knowledge_vector(self, knowledge_id: int):
         if self.collection:
-            try:
-                self.collection.delete(ids=[f"gen_{knowledge_id}"])
-                logger.info(f"🗑️ Deleted knowledge ID {knowledge_id} from Vector DB")
-            except Exception as e:
-                logger.error(f"❌ Delete vector error: {e}")
+            try: self.collection.delete(ids=[f"gen_{knowledge_id}"])
+            except: pass
 
     async def answer_question(self, question: str, history: List[Dict] = []) -> str:
-        """Answer question using Local Semantic Search + Gemini (if available)"""
-        if not self.chroma_client or not self.embeddings:
-            return "Xin lỗi, hệ thống AI hiện chưa sẵn sàng."
-
+        if not self.chroma_client or not self.embeddings: return "Hệ thống AI chưa sẵn sàng."
         try:
-            # 1. Search semantic context using local embeddings
             query_vector = self.embeddings.embed_query(question)
-            results = self.collection.query(
-                query_embeddings=[query_vector],
-                n_results=2
-            )
-            
+            results = self.collection.query(query_embeddings=[query_vector], n_results=3)
             context = ""
             if results['documents'] and results['documents'][0]:
                 context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(results['documents'][0])
             
-            # 2. Fallback if no Gemini Key
             if not self.llm:
-                if context:
-                    return f"Tôi đã tìm thấy thông tin sau cho bạn:\n\n{context}\n\n(Lưu ý: Tôi đang chạy ở chế độ tìm kiếm trực tiếp vì chưa có API Key cho Chatbot)."
-                return "Xin lỗi, tôi chưa tìm thấy kiến thức nào khớp với câu hỏi của bạn."
+                return f"Tôi tìm thấy thông tin sau:\n\n{context}" if context else "Chưa có dữ liệu."
 
-            # 3. Use Gemini to format answer
-            system_prompt = f"""
-            Bạn là chuyên gia Thú y AI. Trả lời dựa trên ngữ cảnh dưới đây:
+            # SỬ DỤNG HOÀN TOÀN TỪ WEB ADMIN (Dọn dẹp code)
+            if self.custom_system_prompt:
+                base_prompt = self.custom_system_prompt
+            else:
+                # Fallback tối giản nhất nếu admin chưa kịp nhập trên Web
+                base_prompt = "{context}\n\nTrả lời dựa trên dữ liệu trên."
             
-            {context}
+            # CHÈN KIẾN THỨC VÀO PROMPT
+            final_system_prompt = base_prompt.replace("{context}", context)
             
-            Nếu không có thông tin, hãy trả lời theo hiểu biết chuyên môn và nhắc người dân cẩn trọng.
-            Luôn nêu NGUỒN TÀI LIỆU nếu có.
-            """
-            
-            messages = [SystemMessage(content=system_prompt)]
+            messages = [SystemMessage(content=final_system_prompt)]
             for msg in history[-5:]:
                 messages.append(HumanMessage(content=msg["content"]) if msg["role"] == "user" else SystemMessage(content=msg["content"]))
             messages.append(HumanMessage(content=question))
             
             response = await self.llm.ainvoke(messages)
-            return response.content
             
+            # Ghi Log sử dụng
+            try:
+                # Trích xuất token usage nếu có
+                usage = getattr(response, 'response_metadata', {}).get('token_usage', {})
+                usage_service.log_usage(
+                    feature="chat",
+                    provider="groq" if "groq" in str(type(self.llm)).lower() else "gemini",
+                    model=getattr(self.llm, 'model_name', getattr(self.llm, 'model', 'unknown')),
+                    tokens_prompt=usage.get('prompt_tokens', 0),
+                    tokens_completion=usage.get('completion_tokens', 0)
+                )
+            except Exception as log_err:
+                logger.error(f"Usage Logging Error: {log_err}")
+
+            return response.content
         except Exception as e:
             logger.error(f"❌ RAG Error: {e}")
-            return "Đã xảy ra lỗi khi xử lý câu hỏi của bạn."
+            return "Đã xảy ra lỗi khi xử lý câu hỏi."
 
-# Singleton
 _rag_service: Optional[RAGService] = None
-
 def get_rag_service() -> RAGService:
     global _rag_service
-    if _rag_service is None:
-        _rag_service = RAGService()
+    if _rag_service is None: _rag_service = RAGService()
     return _rag_service

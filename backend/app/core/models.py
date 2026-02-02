@@ -163,7 +163,32 @@ class GeneralKnowledge(Base):
     
     # State Tracking cho Sync Vector DB
     sync_status = Column(String, default="PENDING") # PENDING, SUCCESS, ERROR
-    sync_error = Column(Text, nullable=True)
-    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# 8. System Settings (Lưu API Keys, Model Config...)
+class Setting(Base):
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True) # VD: groq_api_key, active_model
+    value = Column(Text)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+# 9. Usage Logs (Theo dõi mức độ sử dụng AI)
+class UsageLog(Base):
+    __tablename__ = "usage_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    feature = Column(String) # VD: chat, classification, detection
+    provider = Column(String) # VD: groq, gemini, yolo
+    model = Column(String) # VD: llama-3.3-70b, yolov8n
+    tokens_prompt = Column(Integer, default=0)
+    tokens_completion = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost_est = Column(Float, default=0.0) # Chi phí ước tính (USD)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    user = relationship("User")

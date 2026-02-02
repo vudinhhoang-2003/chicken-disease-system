@@ -59,6 +59,12 @@ export const adminApi = {
     updateGeneralKnowledge: (id: number, data: any) => api.put(`/admin/knowledge/${id}`, data),
     deleteGeneralKnowledge: (id: number) => api.delete(`/admin/knowledge/${id}`),
 
+    // System Settings
+    getSettings: () => api.get('/admin/settings'),
+    updateSetting: (data: any) => api.post('/admin/settings', data),
+    testAI: (data: any) => api.post('/admin/test-ai', data),
+    getUsageStats: () => api.get('/admin/usage-stats'),
+
     // User Management
     getUsers: () => api.get('/admin/users'),
     createUser: (data: any) => api.post('/admin/users', data),

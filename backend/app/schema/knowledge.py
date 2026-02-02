@@ -92,3 +92,19 @@ class GeneralKnowledgeOut(GeneralKnowledgeBase):
     
     class Config:
         from_attributes = True
+
+# 5. Setting Schemas
+class SettingBase(BaseModel):
+    key: str
+    value: str
+    description: Optional[str] = None
+
+class SettingCreate(SettingBase):
+    pass
+
+class SettingOut(SettingBase):
+    id: int
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

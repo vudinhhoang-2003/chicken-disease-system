@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep
 from app.config import get_settings
 from app.api import deps
+from app.services.usage_service import usage_service
 
 router = APIRouter()
 settings = get_settings()
@@ -54,6 +55,14 @@ async def detect_chickens(
     annot_rel_path = os.path.join("detections", annot_filename)
     annot_abs_path = os.path.join(settings.upload_dir, annot_rel_path)
     cv2.imwrite(annot_abs_path, results["annotated_image"])
+    
+    # Log usage
+    usage_service.log_usage(
+        feature="detection",
+        provider="yolo",
+        model="yolov8n",
+        user_id=current_user.id
+    )
     
     # Save to Database
     db_log = DetectionLog(
@@ -123,6 +132,14 @@ async def classify_disease(
     # Run classification
     results = await yolo_service.classify_disease(image)
     
+    # Log usage
+    usage_service.log_usage(
+        feature="classification",
+        provider="yolo",
+        model="yolov8n-cls",
+        user_id=current_user.id
+    )
+
     # Save to Database
     db_log = DiagnosisLog(
         image_path=relative_path,

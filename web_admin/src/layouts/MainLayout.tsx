@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Drawer, AppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
-import { Menu as MenuIcon, Dashboard as DashboardIcon, History as HistoryIcon, Psychology as PsychologyIcon, People as PeopleIcon, Logout as LogoutIcon, School as SchoolIcon } from '@mui/icons-material';
+import { Menu as MenuIcon, Dashboard as DashboardIcon, History as HistoryIcon, Psychology as PsychologyIcon, People as PeopleIcon, Logout as LogoutIcon, School as SchoolIcon, SettingsSuggest as ConfigIcon, BarChart as UsageIcon } from '@mui/icons-material';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,6 +26,8 @@ const MainLayout = () => {
     { text: 'Bệnh học (RAG)', icon: <PsychologyIcon />, path: '/knowledge' },
     { text: 'Kiến thức chung', icon: <SchoolIcon />, path: '/general-knowledge' },
     { text: 'Người dùng', icon: <PeopleIcon />, path: '/users' },
+    { text: 'Cấu hình AI', icon: <ConfigIcon />, path: '/ai-settings' },
+    { text: 'Sử dụng AI', icon: <UsageIcon />, path: '/ai-usage' },
   ];
 
   const drawer = (

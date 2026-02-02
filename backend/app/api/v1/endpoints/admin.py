@@ -4,15 +4,116 @@ from sqlalchemy import func, cast, Date, case
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from app.core.database import get_db
-from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine, GeneralKnowledge
+from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep, Medicine, GeneralKnowledge, Setting, UsageLog
 from app.api.deps import get_current_active_superuser
-from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate, GeneralKnowledgeCreate, GeneralKnowledgeOut, GeneralKnowledgeUpdate
+from app.schema.knowledge import DiseaseCreate, DiseaseOut, DiseaseUpdate, GeneralKnowledgeCreate, GeneralKnowledgeOut, GeneralKnowledgeUpdate, SettingCreate, SettingOut
 from app.schema.user import UserCreate, UserUpdate, UserOut
 from app.core.security import get_password_hash
 from app.services.rag_service import get_rag_service
+from langchain.schema import HumanMessage
 
 router = APIRouter()
 rag_service = get_rag_service()
+
+# --- SYSTEM SETTINGS ENDPOINTS ---
+
+@router.post("/test-ai")
+async def test_ai_connection(
+    config: Dict[str, Any],
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Kiểm tra thử Key AI có hoạt động không"""
+    provider = config.get("ai_provider")
+    model_name = config.get("ai_model")
+    
+    try:
+        if provider == "groq":
+            api_key = config.get("ai_groq_key")
+            if not api_key: raise Exception("Thiếu Groq API Key")
+            from langchain_groq import ChatGroq
+            llm = ChatGroq(groq_api_key=api_key, model_name=model_name, temperature=0)
+        elif provider == "gemini":
+            api_key = config.get("ai_gemini_key")
+            if not api_key: raise Exception("Thiếu Gemini API Key")
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            llm = ChatGoogleGenerativeAI(google_api_key=api_key, model=model_name, temperature=0)
+        else:
+            raise Exception("Nhà cung cấp không hợp lệ")
+
+        # Thử gửi một câu hỏi ngắn
+        response = await llm.ainvoke([HumanMessage(content="Hello, respond with 'OK' only.")])
+        return {"status": "success", "message": "Kết nối thành công!", "response": response.content}
+    
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@router.get("/settings", response_model=List[SettingOut])
+async def get_settings_list(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Lấy danh sách cấu hình hệ thống"""
+    return db.query(Setting).all()
+
+@router.post("/settings", response_model=SettingOut)
+async def update_setting(
+    setting_in: SettingCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Cập nhật hoặc thêm mới cấu hình"""
+    db_setting = db.query(Setting).filter(Setting.key == setting_in.key).first()
+    if db_setting:
+        db_setting.value = setting_in.value
+        db_setting.description = setting_in.description
+    else:
+        db_setting = Setting(**setting_in.dict())
+        db.add(db_setting)
+    
+    db.commit()
+    db.refresh(db_setting)
+    
+    # Re-init RAG Service to apply new config
+    try:
+        rs = get_rag_service()
+        rs._initialize_llm()
+    except Exception as e:
+        print(f"Error re-initializing LLM: {e}")
+        
+    return db_setting
+
+@router.get("/usage-stats")
+async def get_usage_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_superuser)
+):
+    """Lấy số liệu thống kê sử dụng AI"""
+    total_logs = db.query(UsageLog).count()
+    total_tokens = db.query(func.sum(UsageLog.total_tokens)).scalar() or 0
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=6)
+    daily_usage = db.query(
+        cast(UsageLog.created_at, Date).label('date'),
+        func.count(UsageLog.id).label('count'),
+        func.sum(UsageLog.total_tokens).label('tokens')
+    ).filter(UsageLog.created_at >= start_date).group_by(cast(UsageLog.created_at, Date)).all()
+    usage_chart = []
+    current_day = start_date
+    usage_map = {str(r.date): {'count': r.count, 'tokens': r.tokens or 0} for r in daily_usage}
+    while current_day <= end_date:
+        day_str = current_day.strftime('%Y-%m-%d')
+        display_name = current_day.strftime('%d/%m')
+        data = usage_map.get(day_str, {'count': 0, 'tokens': 0})
+        usage_chart.append({"name": display_name, "requests": data['count'], "tokens": data['tokens']})
+        current_day += timedelta(days=1)
+    feature_dist = db.query(UsageLog.feature, func.count(UsageLog.id)).group_by(UsageLog.feature).all()
+    feature_data = [{"name": f.capitalize(), "value": c} for f, c in feature_dist]
+    return {
+        "total_requests": total_logs,
+        "total_tokens": total_tokens,
+        "daily_usage": usage_chart,
+        "feature_distribution": feature_data
+    }
 
 # --- EXISTING STATS ENDPOINTS ---
 
@@ -43,17 +144,12 @@ async def get_dashboard_stats(
     # Map query result to list of days
     daily_stats = []
     current_day = start_date
-    
-    # Convert query result to dict for easy lookup
     data_map = {str(r.date): {'total': r.total, 'sick': r.sick or 0} for r in daily_query}
     
     while current_day <= end_date:
         day_str = current_day.strftime('%Y-%m-%d')
-        # Display format: "Mon" or "02/02"
         display_name = current_day.strftime('%d/%m') 
-        
         stat = data_map.get(day_str, {'total': 0, 'sick': 0})
-        
         daily_stats.append({
             "name": display_name,
             "visits": stat['total'],
@@ -62,7 +158,6 @@ async def get_dashboard_stats(
         current_day += timedelta(days=1)
 
     # 3. Disease Distribution (Pie Chart)
-    # Get top 5 diseases + Others
     dist_query = db.query(
         DiagnosisLog.predicted_disease, 
         func.count(DiagnosisLog.id)
@@ -72,9 +167,7 @@ async def get_dashboard_stats(
         DiagnosisLog.predicted_disease
     ).order_by(func.count(DiagnosisLog.id).desc()).limit(5).all()
     
-    # Healthy count
     healthy_count = total_diagnosis - sick_cases
-    
     pie_data = [{"name": "Khỏe mạnh", "value": healthy_count}]
     for disease, count in dist_query:
         pie_data.append({"name": disease, "value": count})
@@ -84,8 +177,8 @@ async def get_dashboard_stats(
         "sick_cases": sick_cases,
         "total_detections": total_detections,
         "total_fecal_analysis": total_diagnosis,
-        "chart_data": daily_stats, # Real daily data
-        "pie_data": pie_data       # Real distribution data
+        "chart_data": daily_stats,
+        "pie_data": pie_data
     }
 
 @router.get("/recent-logs")
@@ -94,12 +187,8 @@ async def get_recent_logs(
     limit: int = 20,
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy danh sách các chẩn đoán mới nhất từ cả 2 loại: Phân và Phát hiện gà"""
-    
-    # Lấy log chẩn đoán bệnh qua phân
+    """Lấy danh sách các chẩn đoán mới nhất"""
     diagnosis_logs = db.query(DiagnosisLog).order_by(DiagnosisLog.created_at.desc()).limit(limit).all()
-    
-    # Format lại dữ liệu để frontend dễ hiển thị
     formatted_logs = []
     for log in diagnosis_logs:
         formatted_logs.append({
@@ -112,7 +201,6 @@ async def get_recent_logs(
             "status": "Hoàn thành" if log.verified_result is None else "Đã xác nhận"
         })
         
-    # Lấy log phát hiện gà
     detection_logs = db.query(DetectionLog).order_by(DetectionLog.created_at.desc()).limit(limit).all()
     for log in detection_logs:
         formatted_logs.append({
@@ -120,14 +208,11 @@ async def get_recent_logs(
             "type": "Hành vi/Sức khỏe",
             "image_url": f"/uploads/{log.annotated_image_path}",
             "result": f"{log.sick_count} gà bệnh / {log.total_chickens} tổng",
-            "confidence": 0.0, # Detection không dùng single confidence cho cả ảnh
+            "confidence": 0.0,
             "created_at": log.created_at,
             "status": "Cần chú ý" if log.sick_count > 0 else "Bình thường"
         })
-    
-    # Sắp xếp lại theo thời gian
     formatted_logs.sort(key=lambda x: x["created_at"], reverse=True)
-    
     return formatted_logs[:limit]
 
 # --- GENERAL KNOWLEDGE ENDPOINTS ---
@@ -139,7 +224,6 @@ async def get_general_knowledge(
     limit: int = 100,
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy danh sách kiến thức chung"""
     return db.query(GeneralKnowledge).order_by(GeneralKnowledge.id.desc()).offset(skip).limit(limit).all()
 
 @router.post("/knowledge", response_model=GeneralKnowledgeOut)
@@ -149,14 +233,11 @@ async def create_general_knowledge(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Thêm kiến thức mới"""
     knowledge = GeneralKnowledge(**knowledge_in.dict())
     knowledge.sync_status = "PENDING"
     db.add(knowledge)
     db.commit()
     db.refresh(knowledge)
-    
-    # Sync in background
     background_tasks.add_task(rag_service.sync_general_knowledge, knowledge.id)
     return knowledge
 
@@ -168,19 +249,14 @@ async def update_general_knowledge(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Cập nhật kiến thức"""
     knowledge = db.query(GeneralKnowledge).filter(GeneralKnowledge.id == k_id).first()
     if not knowledge:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
-        
     for field, value in knowledge_in.dict(exclude_unset=True).items():
         setattr(knowledge, field, value)
-    
     knowledge.sync_status = "PENDING"
     db.commit()
     db.refresh(knowledge)
-    
-    # Sync in background
     background_tasks.add_task(rag_service.sync_general_knowledge, knowledge.id)
     return knowledge
 
@@ -190,16 +266,13 @@ async def delete_general_knowledge(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Xóa kiến thức"""
     knowledge = db.query(GeneralKnowledge).filter(GeneralKnowledge.id == k_id).first()
     if not knowledge:
         raise HTTPException(status_code=404, detail="Không tìm thấy bài viết")
-        
     try:
         rag_service.delete_general_knowledge_vector(k_id)
     except:
         pass
-        
     db.delete(knowledge)
     db.commit()
     return {"message": "Đã xóa thành công"}
@@ -213,7 +286,6 @@ async def get_diseases(
     limit: int = 100,
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy danh sách các bệnh"""
     diseases = db.query(Disease).order_by(Disease.id.desc()).offset(skip).limit(limit).all()
     return diseases
 
@@ -223,7 +295,6 @@ async def get_disease(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy chi tiết một bệnh"""
     disease = db.query(Disease).filter(Disease.id == disease_id).first()
     if not disease:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh")
@@ -236,36 +307,24 @@ async def create_disease(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Thêm mới bệnh và phác đồ điều trị"""
-    
-    # Check duplicate code
     if db.query(Disease).filter(Disease.code == disease_in.code).first():
         raise HTTPException(status_code=400, detail="Mã bệnh đã tồn tại")
-
-    # 1. Create Disease
     disease_data = disease_in.dict(exclude={"treatment_steps"})
     disease = Disease(**disease_data)
-    disease.sync_status = "PENDING" # Mark as pending
+    disease.sync_status = "PENDING"
     db.add(disease)
-    db.flush() # Flush to get disease.id
-
-    # 2. Create Treatment Steps & Medicines
+    db.flush()
     for step_in in disease_in.treatment_steps:
         step_data = step_in.dict(exclude={"medicines"})
         step = TreatmentStep(**step_data, disease_id=disease.id)
         db.add(step)
-        db.flush() # Flush to get step.id
-        
+        db.flush()
         for med_in in step_in.medicines:
             med = Medicine(**med_in.dict(), step_id=step.id)
             db.add(med)
-            
     db.commit()
     db.refresh(disease)
-    
-    # Sync to Vector DB in Background
     background_tasks.add_task(rag_service.sync_disease, disease.id)
-        
     return disease
 
 @router.put("/diseases/{disease_id}", response_model=DiseaseOut)
@@ -276,25 +335,17 @@ async def update_disease(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Cập nhật thông tin bệnh"""
     disease = db.query(Disease).filter(Disease.id == disease_id).first()
     if not disease:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh")
-    
     update_data = disease_in.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(disease, field, value)
-    
-    # Reset status to PENDING when updated
     disease.sync_status = "PENDING"
     disease.sync_error = None
-        
     db.commit()
     db.refresh(disease)
-    
-    # Sync to Vector DB in Background
     background_tasks.add_task(rag_service.sync_disease, disease.id)
-        
     return disease
 
 @router.delete("/diseases/{disease_id}")
@@ -303,18 +354,14 @@ async def delete_disease(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Xóa bệnh"""
     disease = db.query(Disease).filter(Disease.id == disease_id).first()
     if not disease:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh")
-    
-    # Delete from Vector DB
     try:
         rag_service.delete_disease_vector(disease_id)
     except Exception as e:
         print(f"Delete vector error: {e}")
-
-    db.delete(disease) # Cascade delete should handle steps/medicines
+    db.delete(disease)
     db.commit()
     return {"message": "Đã xóa thành công"}
 
@@ -325,9 +372,7 @@ async def get_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy danh sách người dùng"""
     users = db.query(User).offset(skip).limit(limit).all()
-    # Mask password
     for user in users:
         user.hashed_password = "***"
     return users
@@ -338,13 +383,9 @@ async def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Tạo người dùng mới"""
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email này đã được sử dụng.",
-        )
+        raise HTTPException(status_code=400, detail="Email này đã được sử dụng.")
     user = User(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
@@ -364,23 +405,15 @@ async def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Cập nhật thông tin người dùng"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Người dùng không tồn tại",
-        )
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
     user_data = user_in.dict(exclude_unset=True)
     if "password" in user_data and user_data["password"]:
-        password = user_data["password"]
-        hashed_password = get_password_hash(password)
+        user.hashed_password = get_password_hash(user_data["password"])
         del user_data["password"]
-        user.hashed_password = hashed_password
-    
     for field, value in user_data.items():
         setattr(user, field, value)
-        
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -392,19 +425,11 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Xóa người dùng"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Người dùng không tồn tại",
-        )
+        raise HTTPException(status_code=404, detail="Người dùng không tồn tại")
     if user.id == current_user.id:
-        raise HTTPException(
-            status_code=400,
-            detail="Không thể tự xóa chính mình",
-        )
-        
+        raise HTTPException(status_code=400, detail="Không thể tự xóa chính mình")
     db.delete(user)
     db.commit()
     return {"message": "Đã xóa người dùng thành công"}
