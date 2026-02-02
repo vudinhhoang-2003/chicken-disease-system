@@ -1,7 +1,7 @@
 import logging
 from typing import List, Optional, Dict
 import chromadb
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.schema import SystemMessage, HumanMessage
 from sqlalchemy.orm import joinedload
@@ -14,20 +14,25 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class RAGService:
-    """Service for RAG using Local HuggingFace Embeddings and Google Gemini LLM"""
+    """Service for RAG using Local HuggingFace Embeddings and Groq LLM"""
 
     def __init__(self):
         self.settings = get_settings()
         
-        # 1. Initialize Gemini LLM (Optional fallback)
-        if self.settings.google_api_key:
-            self.llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                google_api_key=self.settings.google_api_key,
-                temperature=0.2
-            )
+        # 1. Initialize Groq LLM
+        if self.settings.groq_api_key:
+            try:
+                self.llm = ChatGroq(
+                    groq_api_key=self.settings.groq_api_key,
+                    model_name=self.settings.llm_model,
+                    temperature=0.2
+                )
+                logger.info(f"✅ Groq LLM initialized with model: {self.settings.llm_model}")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize Groq LLM: {e}")
+                self.llm = None
         else:
-            logger.warning("⚠️ GOOGLE_API_KEY not found. LLM will not be available.")
+            logger.warning("⚠️ GROQ_API_KEY not found. LLM will not be available.")
             self.llm = None
 
         # 2. Initialize LOCAL Embeddings (HuggingFace)

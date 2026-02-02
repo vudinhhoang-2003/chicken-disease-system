@@ -14,8 +14,12 @@ class Settings(BaseSettings):
     chroma_host: str = "localhost"
     chroma_port: int = 8001
     
-    # Google Gemini API
+    # Google Gemini API (Legacy)
     google_api_key: str = ""
+    
+    # Groq API
+    groq_api_key: str = ""
+    llm_model: str = "llama-3.3-70b-versatile"
     
     # App Settings
     environment: str = "development"
