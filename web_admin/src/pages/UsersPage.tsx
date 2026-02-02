@@ -6,8 +6,9 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControlLabel, Switch, Snackbar, Alert
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility, VisibilityOff } from '@mui/icons-material';
 import { adminApi } from '../services/api';
+import { InputAdornment } from '@mui/material';
 
 interface User {
   id: number;
@@ -23,6 +24,7 @@ const UsersPage = () => {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -51,6 +53,7 @@ const UsersPage = () => {
   }, []);
 
   const handleOpenDialog = (user?: User) => {
+    setShowPassword(false); // Reset show password
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -209,11 +212,20 @@ const UsersPage = () => {
           <TextField
             margin="dense"
             label={editingUser ? "Mật khẩu mới (Để trống nếu không đổi)" : "Mật khẩu"}
-            type="password"
+            type={showPassword ? "text" : "password"}
             fullWidth
             variant="outlined"
             value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
           <TextField
             margin="dense"

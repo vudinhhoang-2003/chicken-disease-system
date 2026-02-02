@@ -12,6 +12,7 @@ from app.schema.detection import DetectionResponse, ClassificationResponse, Dete
 from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep
 from app.config import get_settings
+from app.api import deps
 
 router = APIRouter()
 settings = get_settings()
@@ -20,7 +21,8 @@ settings = get_settings()
 async def detect_chickens(
     file: UploadFile = File(...),
     yolo_service: YOLOService = Depends(get_yolo_service),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
 ) -> Any:
     """
     Detect healthy and sick chickens in an image and save to database
@@ -60,7 +62,8 @@ async def detect_chickens(
         total_chickens=results["total_chickens"],
         healthy_count=results["healthy_count"],
         sick_count=results["sick_count"],
-        raw_result=results["detections"]
+        raw_result=results["detections"],
+        user_id=current_user.id
     )
     db.add(db_log)
     db.commit()
@@ -94,7 +97,8 @@ async def detect_chickens(
 async def classify_disease(
     file: UploadFile = File(...),
     yolo_service: YOLOService = Depends(get_yolo_service),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
 ) -> Any:
     """
     Classify chicken disease from a fecal image and save to database
@@ -124,7 +128,8 @@ async def classify_disease(
         image_path=relative_path,
         predicted_disease=results["disease"],
         confidence=results["confidence"],
-        all_probabilities=results["all_probabilities"]
+        all_probabilities=results["all_probabilities"],
+        user_id=current_user.id
     )
     db.add(db_log)
     db.commit()
