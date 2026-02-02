@@ -33,8 +33,8 @@ const MainLayout = () => {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div" color="primary" sx={{ fontWeight: 'bold' }}>
-          GÀ AI ADMIN
+        <Typography variant="h6" noWrap component="div" color="primary" sx={{ fontWeight: '900', letterSpacing: 1 }}>
+          CHICKHEALTH
         </Typography>
       </Toolbar>
       <Divider />
@@ -58,8 +58,8 @@ const MainLayout = () => {
           <IconButton color="inherit" aria-label="open drawer" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2, display: { sm: 'none' } }}>
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Chicken Disease System - Quản trị viên
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 'bold', letterSpacing: 1 }}>
+            CHICKHEALTH ADMIN
           </Typography>
           
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
