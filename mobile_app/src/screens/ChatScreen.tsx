@@ -13,6 +13,11 @@ interface Message {
   text: string;
   sender: 'user' | 'ai';
   timestamp: Date;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 const ChatScreen = () => {
@@ -56,6 +61,7 @@ const ChatScreen = () => {
         text: response.data.answer,
         sender: 'ai',
         timestamp: new Date(),
+        usage: response.data.usage,
       };
 
       setMessages(prev => [...prev, aiMsg]);
@@ -96,9 +102,16 @@ const ChatScreen = () => {
               {item.text}
             </Markdown>
           )}
-          <Text style={[styles.timeText, isUser && { color: 'rgba(255,255,255,0.6)' }]}>
-            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+          <View style={styles.messageFooter}>
+            {!isUser && item.usage && (
+              <Text style={styles.usageText}>
+                {`Total: ${item.usage.total_tokens} tokens`}
+              </Text>
+            )}
+            <Text style={[styles.timeText, isUser && { color: 'rgba(255,255,255,0.6)' }]}>
+              {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -178,7 +191,19 @@ const styles = StyleSheet.create({
   userBubble: { backgroundColor: '#2e7d32', borderBottomRightRadius: 2 },
   aiBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 2 },
   userText: { color: '#fff', fontSize: 15, lineHeight: 22 },
-  timeText: { fontSize: 10, color: 'rgba(0,0,0,0.3)', marginTop: 4, alignSelf: 'flex-end' },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  usageText: { 
+    fontSize: 9, 
+    color: '#2e7d32', 
+    fontStyle: 'italic',
+    fontWeight: '500'
+  },
+  timeText: { fontSize: 10, color: 'rgba(0,0,0,0.3)', alignSelf: 'flex-end' },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
   loadingText: { fontSize: 12, color: '#2e7d32', fontStyle: 'italic', marginLeft: 8 },
   inputContainer: {

@@ -1,5 +1,4 @@
-"""YOLO Service for chicken disease detection and classification"""
-
+import os
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -7,6 +6,7 @@ from typing import Dict, List, Optional
 import logging
 from pathlib import Path
 import torch
+import imageio
 
 # Fix for PyTorch 2.6+ weights_only loading issue with Ultralytics
 # Monkeypatch torch.load to default to weights_only=False
@@ -57,6 +57,138 @@ class YOLOService:
             logger.error(f"❌ Error loading models: {e}")
             raise
     
+    async def process_video(
+        self,
+        input_path: str,
+        output_path: str,
+        conf_threshold: float = 0.5,
+        skip_frames: int = 3  # Process 1 frame every X frames
+    ) -> Dict:
+        """
+        Process video file: Detect sick chickens frame by frame (with skipping).
+        Generates both MP4 video and GIF preview.
+        
+        Args:
+            input_path: Path to input video file
+            output_path: Path to save processed video
+            conf_threshold: Confidence threshold
+            skip_frames: Number of frames to skip (0 = process all)
+            
+        Returns:
+            Dictionary with aggregated stats and gif_path
+        """
+        if self.detection_model is None:
+            raise RuntimeError("Detection model not loaded")
+
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            raise RuntimeError("Could not open video file")
+
+        # Get video properties
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        
+        # Define codec and create VideoWriter
+        # Try 'avc1' (H.264) for better mobile compatibility, fallback to 'mp4v' if needed
+        fourcc = cv2.VideoWriter_fourcc(*'avc1') 
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        frame_count = 0
+        max_sick = 0
+        max_total = 0
+        total_sick_accum = 0
+        processed_frames_count = 0
+        
+        last_results = None # To cache results for skipped frames
+        gif_frames = [] # Store frames for GIF
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Process frame if it matches skip pattern OR if it's the first frame
+            if frame_count % (skip_frames + 1) == 0:
+                results = self.detection_model(frame, conf=conf_threshold, verbose=False)
+                last_results = results
+                processed_frames_count += 1
+                
+                # Count stats for this frame
+                current_sick = 0
+                current_total = 0
+                
+                # Draw boxes on frame
+                annotated_frame = frame.copy()
+                for box in results[0].boxes:
+                    current_total += 1
+                    class_id = int(box.cls)
+                    class_name = results[0].names[class_id]
+                    
+                    is_healthy = "healthy" in class_name.lower()
+                    if not is_healthy:
+                        current_sick += 1
+                    
+                    # Draw
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    color = (0, 255, 0) if is_healthy else (0, 0, 255)
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                    label = f"{class_name} {box.conf[0]:.2f}"
+                    cv2.putText(annotated_frame, label, (x1, y1 - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                
+                # Update aggregated stats
+                max_sick = max(max_sick, current_sick)
+                max_total = max(max_total, current_total)
+                total_sick_accum += current_sick
+                
+                # Save frame for GIF (Resize to width 480 to keep size small)
+                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                h, w = rgb_frame.shape[:2]
+                new_w = 480
+                new_h = int(h * (new_w / w))
+                resized_frame = cv2.resize(rgb_frame, (new_w, new_h))
+                gif_frames.append(resized_frame)
+                
+            else:
+                # For skipped frames, just use the last annotated frame (or draw last boxes)
+                annotated_frame = frame.copy()
+                if last_results:
+                    for box in last_results[0].boxes:
+                        class_id = int(box.cls)
+                        class_name = last_results[0].names[class_id]
+                        is_healthy = "healthy" in class_name.lower()
+                        
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        color = (0, 255, 0) if is_healthy else (0, 0, 255)
+                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                        label = f"{class_name} {box.conf[0]:.2f}"
+                        cv2.putText(annotated_frame, label, (x1, y1 - 10), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            # Write frame to video
+            out.write(annotated_frame)
+            frame_count += 1
+
+        cap.release()
+        out.release()
+        
+        # Save GIF
+        gif_path = output_path.replace('.mp4', '.gif')
+        # Save GIF with 10fps (since we skipped frames, the visual speed might be fast, but acceptable for preview)
+        imageio.mimsave(gif_path, gif_frames, fps=10, loop=0)
+        
+        return {
+            "total_frames": frame_count,
+            "processed_frames": processed_frames_count,
+            "max_total_chickens": max_total,
+            "max_sick_chickens": max_sick,
+            "avg_sick_chickens": round(total_sick_accum / max(1, processed_frames_count), 1),
+            "has_sick_chickens": max_sick > 0,
+            "gif_path": gif_path,
+            "alert": f"Phát hiện tối đa {max_sick} gà bệnh trong video." if max_sick > 0 else None
+        }
+
     async def detect_sick_chickens(
         self, 
         image: np.ndarray, 

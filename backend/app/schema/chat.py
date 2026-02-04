@@ -8,3 +8,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: Optional[List[str]] = []
+    usage: Optional[dict] = None

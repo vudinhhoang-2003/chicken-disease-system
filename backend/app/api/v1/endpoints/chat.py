@@ -17,12 +17,13 @@ async def ask_veterinary_expert(
     if not request.message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
-    answer = await rag_service.answer_question(
+    result = await rag_service.answer_question(
         question=request.message,
         history=request.history
     )
     
     return ChatResponse(
-        answer=answer,
-        sources=["Hệ thống kiến thức chuyên gia về bệnh gà"]
+        answer=result["answer"],
+        sources=["Hệ thống kiến thức chuyên gia về bệnh gà"],
+        usage=result["usage"]
     )

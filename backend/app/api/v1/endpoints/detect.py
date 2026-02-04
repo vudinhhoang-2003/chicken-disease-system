@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session, joinedload
 
 from app.services.yolo_service import get_yolo_service, YOLOService
-from app.schema.detection import DetectionResponse, ClassificationResponse, DetectionBox
+from app.schema.detection import DetectionResponse, ClassificationResponse, DetectionBox, VideoAnalysisResponse
 from app.core.database import get_db
 from app.core.models import DiagnosisLog, DetectionLog, User, Disease, TreatmentStep
 from app.config import get_settings
@@ -17,6 +17,66 @@ from app.services.usage_service import usage_service
 
 router = APIRouter()
 settings = get_settings()
+
+@router.post("/video_analyze", response_model=VideoAnalysisResponse)
+async def analyze_video(
+    file: UploadFile = File(...),
+    yolo_service: YOLOService = Depends(get_yolo_service),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+) -> Any:
+    """
+    Analyze video to detect sick chickens
+    """
+    # 1. Save uploaded video
+    file_id = str(uuid.uuid4())
+    file_ext = os.path.splitext(file.filename)[1] or ".mp4"
+    
+    input_filename = f"{file_id}_input{file_ext}"
+    input_rel_path = os.path.join("detections", input_filename)
+    input_abs_path = os.path.join(settings.upload_dir, input_rel_path)
+    
+    with open(input_abs_path, "wb") as f:
+        while content := await file.read(1024 * 1024): # Read 1MB chunks
+            f.write(content)
+            
+    # 2. Process video
+    output_filename = f"{file_id}_output.mp4"
+    output_rel_path = os.path.join("detections", output_filename)
+    output_abs_path = os.path.join(settings.upload_dir, output_rel_path)
+    
+    # Process with skip_frames=3 (process 1 frame every 4 frames)
+    stats = await yolo_service.process_video(
+        input_path=input_abs_path,
+        output_path=output_abs_path,
+        skip_frames=3
+    )
+    
+    # 3. Log usage
+    usage_service.log_usage(
+        feature="video_detection",
+        provider="yolo",
+        model="yolov8n",
+        user_id=current_user.id
+    )
+    
+    # Generate relative path for GIF
+    gif_rel_path = output_rel_path.replace('.mp4', '.gif')
+    
+    # 4. Save log (Optional: reuse DetectionLog or create new VideoLog table)
+    # For now, we just log a representative entry in DetectionLog using the video thumbnail?
+    # Or just skip DB logging for MVP video demo
+    
+    return VideoAnalysisResponse(
+        video_url=f"/uploads/{output_rel_path}".replace("\\", "/"),
+        gif_url=f"/uploads/{gif_rel_path}".replace("\\", "/"),
+        total_frames=stats["total_frames"],
+        processed_frames=stats["processed_frames"],
+        max_total_chickens=stats["max_total_chickens"],
+        max_sick_chickens=stats["max_sick_chickens"],
+        has_sick_chickens=stats["has_sick_chickens"],
+        alert=stats["alert"]
+    )
 
 @router.post("/detect", response_model=DetectionResponse)
 async def detect_chickens(

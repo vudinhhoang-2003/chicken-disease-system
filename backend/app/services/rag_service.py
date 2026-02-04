@@ -15,6 +15,8 @@ from app.services.usage_service import usage_service
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+from langchain_community.callbacks import get_openai_callback
+
 class RAGService:
     """Service for RAG using Local HuggingFace Embeddings and Dynamic LLM Provider"""
 
@@ -177,8 +179,9 @@ class RAGService:
             try: self.collection.delete(ids=[f"gen_{knowledge_id}"])
             except: pass
 
-    async def answer_question(self, question: str, history: List[Dict] = []) -> str:
-        if not self.chroma_client or not self.embeddings: return "Hệ thống AI chưa sẵn sàng."
+    async def answer_question(self, question: str, history: List[Dict] = []) -> Dict:
+        if not self.chroma_client or not self.embeddings: 
+            return {"answer": "Hệ thống AI chưa sẵn sàng.", "usage": None}
         try:
             query_vector = self.embeddings.embed_query(question)
             results = self.collection.query(query_embeddings=[query_vector], n_results=3)
@@ -187,7 +190,10 @@ class RAGService:
                 context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(results['documents'][0])
             
             if not self.llm:
-                return f"Tôi tìm thấy thông tin sau:\n\n{context}" if context else "Chưa có dữ liệu."
+                return {
+                    "answer": f"Tôi tìm thấy thông tin sau:\n\n{context}" if context else "Chưa có dữ liệu.",
+                    "usage": None
+                }
 
             # SỬ DỤNG HOÀN TOÀN TỪ WEB ADMIN (Dọn dẹp code)
             if self.custom_system_prompt:
@@ -204,26 +210,37 @@ class RAGService:
                 messages.append(HumanMessage(content=msg["content"]) if msg["role"] == "user" else SystemMessage(content=msg["content"]))
             messages.append(HumanMessage(content=question))
             
-            response = await self.llm.ainvoke(messages)
-            
-            # Ghi Log sử dụng
+            # Sử dụng callback để lấy token usage
+            with get_openai_callback() as cb:
+                response = await self.llm.ainvoke(messages)
+                
+                usage_data = {
+                    "prompt_tokens": cb.prompt_tokens,
+                    "completion_tokens": cb.completion_tokens,
+                    "total_tokens": cb.total_tokens
+                }
+                
+                logger.info(f"📊 Token Usage từ Callback: {usage_data}")
+
+            # Ghi Log sử dụng vào DB
             try:
-                # Trích xuất token usage nếu có
-                usage = getattr(response, 'response_metadata', {}).get('token_usage', {})
                 usage_service.log_usage(
                     feature="chat",
                     provider="groq" if "groq" in str(type(self.llm)).lower() else "gemini",
                     model=getattr(self.llm, 'model_name', getattr(self.llm, 'model', 'unknown')),
-                    tokens_prompt=usage.get('prompt_tokens', 0),
-                    tokens_completion=usage.get('completion_tokens', 0)
+                    tokens_prompt=usage_data["prompt_tokens"],
+                    tokens_completion=usage_data["completion_tokens"]
                 )
             except Exception as log_err:
                 logger.error(f"Usage Logging Error: {log_err}")
 
-            return response.content
+            return {
+                "answer": response.content,
+                "usage": usage_data
+            }
         except Exception as e:
             logger.error(f"❌ RAG Error: {e}")
-            return "Đã xảy ra lỗi khi xử lý câu hỏi."
+            return {"answer": "Đã xảy ra lỗi khi xử lý câu hỏi.", "usage": None}
 
 _rag_service: Optional[RAGService] = None
 def get_rag_service() -> RAGService:
