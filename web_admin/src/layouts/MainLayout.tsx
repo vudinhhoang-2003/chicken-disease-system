@@ -23,7 +23,7 @@ const MainLayout = () => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Lịch sử chẩn đoán', icon: <HistoryIcon />, path: '/logs' },
-    { text: 'Bệnh học (RAG)', icon: <PsychologyIcon />, path: '/knowledge' },
+    { text: 'Bệnh học', icon: <PsychologyIcon />, path: '/knowledge' },
     { text: 'Kiến thức chung', icon: <SchoolIcon />, path: '/general-knowledge' },
     { text: 'Người dùng', icon: <PeopleIcon />, path: '/users' },
     { text: 'Cấu hình AI', icon: <ConfigIcon />, path: '/ai-settings' },
@@ -61,7 +61,7 @@ const MainLayout = () => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 'bold', letterSpacing: 1 }}>
             CHICKHEALTH ADMIN
           </Typography>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Typography variant="body2" sx={{ mr: 2, display: { xs: 'none', md: 'block' } }}>
               Xin chào, <b>{user?.name || 'Admin'}</b>
@@ -72,7 +72,7 @@ const MainLayout = () => {
           </Box>
         </Toolbar>
       </AppBar>
-      
+
       <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
         {/* Mobile Drawer */}
         <Drawer

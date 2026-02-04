@@ -195,7 +195,7 @@ const KnowledgeBase = () => {
               <TableCell>Mã</TableCell>
               <TableCell>Tên bệnh (TV)</TableCell>
               <TableCell>Triệu chứng sơ lược</TableCell>
-              <TableCell>Đồng bộ AI</TableCell>
+              <TableCell>Trạng thái AI</TableCell>
               <TableCell align="right">Hành động</TableCell>
             </TableRow>
           </TableHead>

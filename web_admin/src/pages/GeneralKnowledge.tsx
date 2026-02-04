@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { 
-  Typography, Paper, Table, TableBody, TableCell, 
-  TableContainer, TableHead, TableRow, Button, 
+import {
+  Typography, Paper, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Button,
   IconButton, Box, CircularProgress, Dialog,
   DialogTitle, DialogContent, TextField, DialogActions,
   Chip, Tooltip, Autocomplete
 } from '@mui/material';
-import { 
-  Add as AddIcon, 
-  Delete as DeleteIcon, 
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
   Edit as EditIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
@@ -40,7 +40,7 @@ const GeneralKnowledge = () => {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     category: '',
@@ -72,7 +72,7 @@ const GeneralKnowledge = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Bạn có chắc muốn xóa bài viết này không?')) {
+    if (window.confirm('Bạn có chắc muốn xóa kiến thức này không?')) {
       try {
         await adminApi.deleteGeneralKnowledge(id);
         fetchKnowledge();
@@ -119,7 +119,7 @@ const GeneralKnowledge = () => {
       case 'SUCCESS':
         return (
           <Tooltip title="Đã đồng bộ AI">
-            <Chip icon={<SuccessIcon />} label="OK" color="success" size="small" variant="outlined" />
+            <Chip icon={<SuccessIcon />} label="Đã đồng bộ" color="success" size="small" variant="outlined" />
           </Tooltip>
         );
       case 'ERROR':
@@ -131,14 +131,14 @@ const GeneralKnowledge = () => {
       default:
         return (
           <Tooltip title="Đang xử lý...">
-            <Chip icon={<PendingIcon />} label="Pending" color="warning" size="small" variant="outlined" />
+            <Chip icon={<PendingIcon />} label="Đang xử lý" color="warning" size="small" variant="outlined" />
           </Tooltip>
         );
     }
   };
 
   if (loading) {
-     return <Box p={5} display="flex" justifyContent="center"><CircularProgress /></Box>;
+    return <Box p={5} display="flex" justifyContent="center"><CircularProgress /></Box>;
   }
 
   return (
@@ -149,7 +149,7 @@ const GeneralKnowledge = () => {
           <IconButton size="small" onClick={fetchKnowledge}><RefreshIcon /></IconButton>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-          Thêm bài viết
+          Thêm kiến thức mới
         </Button>
       </Box>
 
@@ -160,7 +160,7 @@ const GeneralKnowledge = () => {
               <TableCell>Danh mục</TableCell>
               <TableCell>Tiêu đề</TableCell>
               <TableCell>Nội dung tóm tắt</TableCell>
-              <TableCell>AI Sync</TableCell>
+              <TableCell>Trạng thái AI</TableCell>
               <TableCell align="right">Hành động</TableCell>
             </TableRow>
           </TableHead>
@@ -193,7 +193,7 @@ const GeneralKnowledge = () => {
       </TableContainer>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editId ? 'Cập nhật bài viết' : 'Thêm bài viết mới'}</DialogTitle>
+        <DialogTitle>{editId ? 'Cập nhật kiến thức' : 'Thêm kiến thức mới'}</DialogTitle>
         <DialogContent>
           <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <Autocomplete
@@ -210,23 +210,23 @@ const GeneralKnowledge = () => {
                 <TextField {...params} label="Danh mục (Chọn hoặc gõ mới)" required fullWidth />
               )}
             />
-            <TextField 
-              label="Tiêu đề" 
-              fullWidth required 
+            <TextField
+              label="Tiêu đề"
+              fullWidth required
               value={formData.title}
-              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             />
-            <TextField 
-              label="Nội dung chi tiết" 
-              fullWidth multiline rows={6} required 
+            <TextField
+              label="Nội dung chi tiết"
+              fullWidth multiline rows={6} required
               value={formData.content}
-              onChange={(e) => setFormData({...formData, content: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
             />
-            <TextField 
-              label="Nguồn tham khảo" 
-              fullWidth 
+            <TextField
+              label="Nguồn tham khảo"
+              fullWidth
               value={formData.source}
-              onChange={(e) => setFormData({...formData, source: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, source: e.target.value })}
             />
           </Box>
         </DialogContent>
