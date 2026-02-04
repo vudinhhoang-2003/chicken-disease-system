@@ -102,16 +102,9 @@ const ChatScreen = () => {
               {item.text}
             </Markdown>
           )}
-          <View style={styles.messageFooter}>
-            {!isUser && item.usage && (
-              <Text style={styles.usageText}>
-                {`Total: ${item.usage.total_tokens} tokens`}
-              </Text>
-            )}
-            <Text style={[styles.timeText, isUser && { color: 'rgba(255,255,255,0.6)' }]}>
-              {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
+          <Text style={[styles.timeText, isUser && { color: 'rgba(255,255,255,0.6)' }]}>
+            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
       </View>
     );
@@ -191,19 +184,7 @@ const styles = StyleSheet.create({
   userBubble: { backgroundColor: '#2e7d32', borderBottomRightRadius: 2 },
   aiBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 2 },
   userText: { color: '#fff', fontSize: 15, lineHeight: 22 },
-  messageFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  usageText: { 
-    fontSize: 9, 
-    color: '#2e7d32', 
-    fontStyle: 'italic',
-    fontWeight: '500'
-  },
-  timeText: { fontSize: 10, color: 'rgba(0,0,0,0.3)', alignSelf: 'flex-end' },
+  timeText: { fontSize: 10, color: 'rgba(0,0,0,0.3)', marginTop: 4, alignSelf: 'flex-end' },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
   loadingText: { fontSize: 12, color: '#2e7d32', fontStyle: 'italic', marginLeft: 8 },
   inputContainer: {
