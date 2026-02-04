@@ -60,7 +60,19 @@ const AISettings = () => {
       const promises = Object.entries(config).map(([key, value]) => 
         adminApi.updateSetting({ key, value: value.toString() })
       );
-      await Promise.all(promises);
+      
+      const results = await Promise.all(promises);
+      
+      // Cập nhật lại config từ kết quả trả về của server (để nhận giá trị masked '********')
+      const updatedConfig = { ...config };
+      results.forEach((res: any) => {
+        const s = res.data;
+        if (s.key in updatedConfig) {
+          (updatedConfig as any)[s.key] = s.key === 'ai_temperature' ? parseFloat(s.value) : s.value;
+        }
+      });
+      setConfig(updatedConfig);
+
       const now = new Date().toLocaleTimeString();
       setLastSaved(now);
       setNotification({ message: 'Cấu hình đã được áp dụng thành công!', type: 'success' });

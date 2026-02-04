@@ -4,7 +4,7 @@ import {
   TableContainer, TableHead, TableRow, Button, 
   IconButton, Box, CircularProgress, Dialog,
   DialogTitle, DialogContent, TextField, DialogActions,
-  Chip, Tooltip
+  Chip, Tooltip, Divider
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -17,6 +17,19 @@ import {
 } from '@mui/icons-material';
 import { adminApi } from '../services/api';
 
+interface Medicine {
+  name: string;
+  active_ingredient?: string;
+  dosage: string;
+}
+
+interface TreatmentStep {
+  step_order: number;
+  description: string;
+  action?: string;
+  medicines: Medicine[];
+}
+
 interface Disease {
   id: number;
   code: string;
@@ -28,6 +41,7 @@ interface Disease {
   source?: string;
   sync_status: 'PENDING' | 'SUCCESS' | 'ERROR';
   sync_error?: string;
+  treatment_steps: TreatmentStep[];
 }
 
 const KnowledgeBase = () => {
@@ -37,14 +51,24 @@ const KnowledgeBase = () => {
   const [editId, setEditId] = useState<number | null>(null);
   
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    code: string;
+    name_vi: string;
+    name_en: string;
+    symptoms: string;
+    cause: string;
+    prevention: string;
+    source: string;
+    treatment_steps: TreatmentStep[];
+  }>({
     code: '',
     name_vi: '',
     name_en: '',
     symptoms: '',
     cause: '',
     prevention: '',
-    source: ''
+    source: '',
+    treatment_steps: []
   });
 
   const fetchDiseases = async () => {
@@ -76,7 +100,16 @@ const KnowledgeBase = () => {
 
   const handleOpenCreate = () => {
     setEditId(null);
-    setFormData({ code: '', name_vi: '', name_en: '', symptoms: '', cause: '', prevention: '', source: '' });
+    setFormData({ 
+      code: '', 
+      name_vi: '', 
+      name_en: '', 
+      symptoms: '', 
+      cause: '', 
+      prevention: '', 
+      source: '',
+      treatment_steps: [] 
+    });
     setOpenDialog(true);
   };
 
@@ -89,30 +122,64 @@ const KnowledgeBase = () => {
       symptoms: disease.symptoms,
       cause: disease.cause,
       prevention: disease.prevention || '',
-      source: disease.source || '' 
+      source: disease.source || '',
+      treatment_steps: disease.treatment_steps || []
     });
     setOpenDialog(true);
   };
 
+  const addStep = () => {
+    const newStep: TreatmentStep = {
+      step_order: formData.treatment_steps.length + 1,
+      description: '',
+      medicines: []
+    };
+    setFormData({ ...formData, treatment_steps: [...formData.treatment_steps, newStep] });
+  };
+
+  const removeStep = (index: number) => {
+    const newSteps = formData.treatment_steps.filter((_, i) => i !== index);
+    // Cập nhật lại số thứ tự bước
+    const updatedSteps = newSteps.map((s, i) => ({ ...s, step_order: i + 1 }));
+    setFormData({ ...formData, treatment_steps: updatedSteps });
+  };
+
+  const addMedicine = (stepIndex: number) => {
+    const newSteps = [...formData.treatment_steps];
+    newSteps[stepIndex].medicines.push({ name: '', dosage: '', active_ingredient: '' });
+    setFormData({ ...formData, treatment_steps: newSteps });
+  };
+
+  const removeMedicine = (stepIndex: number, medIndex: number) => {
+    const newSteps = [...formData.treatment_steps];
+    newSteps[stepIndex].medicines = newSteps[stepIndex].medicines.filter((_, i) => i !== medIndex);
+    setFormData({ ...formData, treatment_steps: newSteps });
+  };
+
   const handleSubmit = async () => {
     try {
+      const payload = {
+        code: formData.code,
+        name_vi: formData.name_vi,
+        name_en: formData.name_en,
+        symptoms: formData.symptoms,
+        cause: formData.cause,
+        prevention: formData.prevention,
+        source: formData.source,
+        treatment_steps: formData.treatment_steps.map(step => ({
+          step_order: step.step_order,
+          description: step.description,
+          medicines: step.medicines.map(med => ({
+            name: med.name,
+            dosage: med.dosage,
+            active_ingredient: med.active_ingredient || ''
+          }))
+        }))
+      };
+
       if (editId) {
-        // Update
-        const payload = {
-          name_vi: formData.name_vi,
-          name_en: formData.name_en,
-          symptoms: formData.symptoms,
-          cause: formData.cause,
-          prevention: formData.prevention,
-          source: formData.source
-        };
         await adminApi.updateDisease(editId, payload);
       } else {
-        // Create
-        const payload = {
-          ...formData,
-          treatment_steps: [] 
-        };
         await adminApi.createDisease(payload);
       }
       
@@ -293,6 +360,77 @@ const KnowledgeBase = () => {
               placeholder="VD: Giáo trình Bệnh Gia cầm - ĐH Nông Lâm"
               onChange={(e) => setFormData({...formData, source: e.target.value})}
             />
+
+            <Divider sx={{ my: 2 }} />
+            
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6" color="primary">Phác đồ điều trị chi tiết</Typography>
+              <Button size="small" startIcon={<AddIcon />} onClick={addStep} variant="outlined">
+                Thêm bước
+              </Button>
+            </Box>
+
+            {formData.treatment_steps.map((step, sIdx) => (
+              <Paper key={sIdx} variant="outlined" sx={{ p: 2, bgcolor: '#fafafa', position: 'relative' }}>
+                <IconButton 
+                  size="small" 
+                  color="error" 
+                  onClick={() => removeStep(sIdx)}
+                  sx={{ position: 'absolute', top: 8, right: 8 }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+
+                <Typography variant="subtitle2" gutterBottom color="secondary">
+                  Bước {step.step_order}
+                </Typography>
+                
+                <TextField 
+                  label="Mô tả bước này" 
+                  fullWidth 
+                  multiline 
+                  rows={2} 
+                  value={step.description}
+                  onChange={(e) => {
+                    const newSteps = [...formData.treatment_steps];
+                    newSteps[sIdx].description = e.target.value;
+                    setFormData({...formData, treatment_steps: newSteps});
+                  }}
+                  sx={{ mb: 2, bgcolor: '#fff' }}
+                />
+
+                <Box mb={1} display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" fontWeight="bold">Danh mục thuốc gợi ý:</Typography>
+                  <Button size="small" startIcon={<AddIcon />} onClick={() => addMedicine(sIdx)}>Thêm thuốc</Button>
+                </Box>
+
+                {step.medicines.map((med, mIdx) => (
+                  <Box key={mIdx} display="flex" gap={1} mb={1} alignItems="center">
+                    <TextField 
+                      label="Tên thuốc" size="small" sx={{ flex: 2, bgcolor: '#fff' }}
+                      value={med.name}
+                      onChange={(e) => {
+                        const newSteps = [...formData.treatment_steps];
+                        newSteps[sIdx].medicines[mIdx].name = e.target.value;
+                        setFormData({...formData, treatment_steps: newSteps});
+                      }}
+                    />
+                    <TextField 
+                      label="Liều dùng" size="small" sx={{ flex: 3, bgcolor: '#fff' }}
+                      value={med.dosage}
+                      onChange={(e) => {
+                        const newSteps = [...formData.treatment_steps];
+                        newSteps[sIdx].medicines[mIdx].dosage = e.target.value;
+                        setFormData({...formData, treatment_steps: newSteps});
+                      }}
+                    />
+                    <IconButton size="small" color="error" onClick={() => removeMedicine(sIdx, mIdx)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Paper>
+            ))}
           </Box>
         </DialogContent>
         <DialogActions>

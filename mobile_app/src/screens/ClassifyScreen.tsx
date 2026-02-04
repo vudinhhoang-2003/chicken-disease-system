@@ -135,32 +135,73 @@ const ClassifyScreen = ({ navigation }: any) => {
             </View>
 
             {result.disease_detail && (
-              <View style={styles.treatmentBox}>
-                <View style={styles.treatmentHeader}>
-                  <Icon name="medical-bag" size={20} color="#fff" />
-                  <Text style={styles.treatmentTitle}>PHÁC ĐỒ ĐIỀU TRỊ</Text>
+              <View>
+                {/* A. Thẻ Phác đồ (Giữ nguyên nhưng làm gọn lại) */}
+                <View style={styles.treatmentBox}>
+                  <View style={styles.treatmentHeader}>
+                    <Icon name="medical-bag" size={20} color="#fff" />
+                    <Text style={styles.treatmentTitle}>PHÁC ĐỒ ĐIỀU TRỊ</Text>
+                  </View>
+                  
+                  <View style={styles.treatmentContent}>
+                    {result.disease_detail.treatment_steps?.map((step: any, index: number) => (
+                      <View key={step.id} style={styles.stepRow}>
+                        <View style={styles.stepIndicator}>
+                          <View style={styles.stepDot} />
+                          {index < result.disease_detail.treatment_steps.length - 1 && <View style={styles.stepLine} />}
+                        </View>
+                        <View style={styles.stepInfo}>
+                          <Text style={styles.stepName}>Bước {step.step_order}</Text>
+                          <Text style={styles.stepDesc}>{step.description}</Text>
+                          {step.medicines?.map((med: any) => (
+                            <View key={med.id} style={styles.pillTag}>
+                              <Icon name="pill" size={14} color="#1565C0" />
+                              <Text style={styles.pillText}>{med.name} • {med.dosage}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-                
-                <View style={styles.treatmentContent}>
-                  {result.disease_detail.treatment_steps?.map((step: any, index: number) => (
-                    <View key={step.id} style={styles.stepRow}>
-                      <View style={styles.stepIndicator}>
-                        <View style={styles.stepDot} />
-                        {index < result.disease_detail.treatment_steps.length - 1 && <View style={styles.stepLine} />}
-                      </View>
-                      <View style={styles.stepInfo}>
-                        <Text style={styles.stepName}>Bước {step.step_order}</Text>
-                        <Text style={styles.stepDesc}>{step.description}</Text>
-                        {step.medicines?.map((med: any) => (
-                          <View key={med.id} style={styles.pillTag}>
-                            <Icon name="pill" size={14} color="#1565C0" />
-                            <Text style={styles.pillText}>{med.name} • {med.dosage}</Text>
-                          </View>
-                        ))}
-                      </View>
+
+                {/* B. Thẻ Thông tin chi tiết (Mới) */}
+                <View style={styles.detailCard}>
+                  <View style={styles.detailSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="alert-circle-outline" size={18} color="#E65100" />
+                      <Text style={styles.sectionTitle}>Triệu chứng đặc trưng</Text>
                     </View>
-                  ))}
+                    <Text style={styles.sectionContent}>{result.disease_detail.symptoms}</Text>
+                  </View>
+
+                  <View style={styles.detailSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="microscope" size={18} color="#455A64" />
+                      <Text style={styles.sectionTitle}>Nguyên nhân</Text>
+                    </View>
+                    <Text style={styles.sectionContent}>{result.disease_detail.cause}</Text>
+                  </View>
+
+                  <View style={styles.detailSection}>
+                    <View style={styles.sectionHeader}>
+                      <Icon name="shield-check-outline" size={18} color="#2E7D32" />
+                      <Text style={styles.sectionTitle}>Cách phòng ngừa</Text>
+                    </View>
+                    <Text style={styles.sectionContent}>{result.disease_detail.prevention}</Text>
+                  </View>
                 </View>
+
+                {/* C. Nút hành động nhanh (Mới) */}
+                <TouchableOpacity 
+                  style={styles.chatActionBtn}
+                  onPress={() => navigation.navigate('Chat', { 
+                    initialMessage: `Chào trợ lý, gà tôi vừa được chẩn đoán bị ${result.disease_detail.name_vi}. Hãy tư vấn thêm cho tôi cách chăm sóc.` 
+                  })}
+                >
+                  <Icon name="chat-question" size={22} color="#fff" />
+                  <Text style={styles.chatActionText}>Hỏi thêm trợ lý AI về bệnh này</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -273,6 +314,24 @@ const styles = StyleSheet.create({
     paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 5
   },
   pillText: { fontSize: 13, color: '#1565C0', fontWeight: '600', marginLeft: 6 },
+
+  // Detail Card
+  detailCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 20, marginTop: 15,
+    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10
+  },
+  detailSection: { marginBottom: 15 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 5 },
+  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#263238' },
+  sectionContent: { fontSize: 14, color: '#546E7A', lineHeight: 20 },
+
+  // Quick Action
+  chatActionBtn: {
+    flexDirection: 'row', backgroundColor: '#1A237E', marginTop: 20,
+    padding: 15, borderRadius: 15, justifyContent: 'center', alignItems: 'center', gap: 10,
+    elevation: 4
+  },
+  chatActionText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 
   // Guide
   guideContainer: { padding: 30, opacity: 0.7 },

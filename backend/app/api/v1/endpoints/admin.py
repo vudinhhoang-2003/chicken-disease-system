@@ -20,20 +20,32 @@ rag_service = get_rag_service()
 @router.post("/test-ai")
 async def test_ai_connection(
     config: Dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Kiểm tra thử Key AI có hoạt động không"""
+    """Kiểm tra thử Key AI có hoạt động không (Hỗ trợ Write-Only pattern)"""
     provider = config.get("ai_provider")
     model_name = config.get("ai_model")
     
     try:
         if provider == "groq":
             api_key = config.get("ai_groq_key")
+            # Nếu nhận được mask từ UI, lấy key thật từ DB
+            if api_key == "********":
+                db_setting = db.query(Setting).filter(Setting.key == "ai_groq_key").first()
+                api_key = db_setting.value if db_setting else None
+                
             if not api_key: raise Exception("Thiếu Groq API Key")
             from langchain_groq import ChatGroq
             llm = ChatGroq(groq_api_key=api_key, model_name=model_name, temperature=0)
+            
         elif provider == "gemini":
             api_key = config.get("ai_gemini_key")
+            # Nếu nhận được mask từ UI, lấy key thật từ DB
+            if api_key == "********":
+                db_setting = db.query(Setting).filter(Setting.key == "ai_gemini_key").first()
+                api_key = db_setting.value if db_setting else None
+                
             if not api_key: raise Exception("Thiếu Gemini API Key")
             from langchain_google_genai import ChatGoogleGenerativeAI
             llm = ChatGoogleGenerativeAI(google_api_key=api_key, model=model_name, temperature=0)
@@ -52,8 +64,27 @@ async def get_settings_list(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
 ):
-    """Lấy danh sách cấu hình hệ thống"""
-    return db.query(Setting).all()
+    """Lấy danh sách cấu hình hệ thống (có che giấu Key quan trọng)"""
+    settings = db.query(Setting).all()
+    
+    # Tạo bản sao để không ảnh hưởng đến DB thực
+    masked_settings = []
+    for s in settings:
+        s_dict = {
+            "id": s.id,
+            "key": s.key,
+            "value": s.value,
+            "description": s.description,
+            "updated_at": s.updated_at
+        }
+        
+        # Nếu là các key nhạy cảm, thực hiện che giấu hoàn toàn (Write-Only pattern)
+        if s.key in ["ai_groq_key", "ai_gemini_key"] and s.value:
+            s_dict["value"] = "********"
+                
+        masked_settings.append(s_dict)
+        
+    return masked_settings
 
 @router.post("/settings", response_model=SettingOut)
 async def update_setting(
@@ -63,24 +94,49 @@ async def update_setting(
 ):
     """Cập nhật hoặc thêm mới cấu hình"""
     db_setting = db.query(Setting).filter(Setting.key == setting_in.key).first()
+    
+    # Logic cập nhật theo chuẩn "Write-Only":
+    # Nếu giá trị gửi lên là '********' (mask), nghĩa là người dùng không thay đổi -> Giữ nguyên DB cũ.
+    # Nếu giá trị khác -> Người dùng đang nhập Key mới -> Cập nhật vào DB.
+    should_update_value = True
+    if setting_in.key in ["ai_groq_key", "ai_gemini_key"]:
+        if setting_in.value == "********":
+            should_update_value = False
+    
     if db_setting:
-        db_setting.value = setting_in.value
+        if should_update_value:
+            db_setting.value = setting_in.value
         db_setting.description = setting_in.description
     else:
+        # Nếu tạo mới mà gửi mask thì không hợp lệ (nhưng cứ lưu để tránh lỗi, thực tế UI sẽ bắt nhập)
         db_setting = Setting(**setting_in.dict())
         db.add(db_setting)
     
     db.commit()
     db.refresh(db_setting)
     
+    # Tạo một dict để trả về, đảm bảo không sửa trực tiếp vào db_setting object
+    # để tránh việc SQLAlchemy tự động lưu '********' vào DB
+    result = {
+        "id": db_setting.id,
+        "key": db_setting.key,
+        "value": db_setting.value,
+        "description": db_setting.description,
+        "updated_at": db_setting.updated_at
+    }
+
     # Re-init RAG Service to apply new config
     try:
         rs = get_rag_service()
         rs._initialize_llm()
     except Exception as e:
         print(f"Error re-initializing LLM: {e}")
+    
+    # Che giấu giá trị trước khi trả về cho Frontend
+    if result["key"] in ["ai_groq_key", "ai_gemini_key"]:
+        result["value"] = "********"
         
-    return db_setting
+    return result
 
 @router.get("/usage-stats")
 async def get_usage_stats(
@@ -330,7 +386,7 @@ async def create_disease(
 @router.put("/diseases/{disease_id}", response_model=DiseaseOut)
 async def update_disease(
     disease_id: int,
-    disease_in: DiseaseUpdate,
+    disease_in: DiseaseCreate, # Sử dụng DiseaseCreate để nhận được cả treatment_steps
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_superuser)
@@ -338,9 +394,29 @@ async def update_disease(
     disease = db.query(Disease).filter(Disease.id == disease_id).first()
     if not disease:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh")
-    update_data = disease_in.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(disease, field, value)
+    
+    # 1. Cập nhật thông tin cơ bản
+    disease.name_vi = disease_in.name_vi
+    disease.name_en = disease_in.name_en
+    disease.symptoms = disease_in.symptoms
+    disease.cause = disease_in.cause
+    disease.prevention = disease_in.prevention
+    disease.source = disease_in.source
+    
+    # 2. Cập nhật phác đồ: Xóa hết cũ, thêm mới (Logic đơn giản và hiệu quả nhất cho MVP)
+    # Xóa các steps cũ (Medicines sẽ tự xóa theo nhờ cascade delete-orphan)
+    db.query(TreatmentStep).filter(TreatmentStep.disease_id == disease.id).delete()
+    
+    # Thêm các steps mới
+    for step_in in disease_in.treatment_steps:
+        step_data = step_in.dict(exclude={"medicines"})
+        step = TreatmentStep(**step_data, disease_id=disease.id)
+        db.add(step)
+        db.flush()
+        for med_in in step_in.medicines:
+            med = Medicine(**med_in.dict(), step_id=step.id)
+            db.add(med)
+
     disease.sync_status = "PENDING"
     disease.sync_error = None
     db.commit()
