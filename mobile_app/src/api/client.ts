@@ -9,7 +9,7 @@ const client = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10s timeout
+  timeout: 30000, // 30s timeout default
 });
 
 // Tự động thêm Token vào mỗi request nếu có

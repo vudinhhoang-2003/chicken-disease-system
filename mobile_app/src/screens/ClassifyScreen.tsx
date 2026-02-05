@@ -1,28 +1,50 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, Image, 
-  ScrollView, ActivityIndicator, Alert, Dimensions, Animated, Easing
+  View, Text, StyleSheet, Pressable, Image, 
+  ScrollView, ActivityIndicator, Alert, Dimensions, Animated, Easing, StatusBar, Platform, TouchableOpacity
 } from 'react-native';
 import { launchCamera, launchImageLibrary, MediaType } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import client from '../api/client';
+import CustomHeader from '../components/CustomHeader';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width - 40;
 
 const ClassifyScreen = ({ navigation }: any) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+
+  const PRIMARY_GREEN = '#2e7d32';
+  const DARK_GREEN = '#1B5E20';
   
-  // Animation value
+  // Animations
   const scanAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(100)).current;
+
+  useEffect(() => {
+    if (loading) startScanAnimation();
+    else stopScanAnimation();
+  }, [loading]);
+
+  useEffect(() => {
+    if (result) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.spring(slideUpAnim, { toValue: 0, friction: 7, useNativeDriver: true })
+      ]).start();
+    }
+  }, [result]);
 
   const startScanAnimation = () => {
+    scanAnim.setValue(0);
     Animated.loop(
       Animated.sequence([
         Animated.timing(scanAnim, { toValue: 1, duration: 1500, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(scanAnim, { toValue: 0, duration: 1500, easing: Easing.linear, useNativeDriver: true })
+        Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true })
       ])
     ).start();
   };
@@ -32,198 +54,212 @@ const ClassifyScreen = ({ navigation }: any) => {
     scanAnim.setValue(0);
   };
 
-  const handleSelectImage = (type: 'camera' | 'library') => {
+  const handleSelectImage = (source: 'camera' | 'library') => {
     const options = { mediaType: 'photo' as MediaType, quality: 0.9, maxWidth: 1200, maxHeight: 1200 };
     const callback = (response: any) => {
       if (response.didCancel || response.errorCode) return;
       if (response.assets?.[0]) {
         const asset = response.assets[0];
         setImageUri(asset.uri);
-        setImageFile({ uri: asset.uri, type: asset.type, name: asset.fileName || 'photo.jpg' });
+        setImageFile({ uri: asset.uri, type: asset.type, name: asset.fileName || 'sample.jpg' });
         setResult(null);
+        fadeAnim.setValue(0);
+        slideUpAnim.setValue(100);
       }
     };
-    if (type === 'camera') launchCamera(options, callback);
+    if (source === 'camera') launchCamera(options, callback);
     else launchImageLibrary(options, callback);
   };
 
   const handleAnalyze = async () => {
     if (!imageFile) return;
     setLoading(true);
-    startScanAnimation();
     
     try {
       const formData = new FormData();
       formData.append('file', { uri: imageFile.uri, type: imageFile.type, name: imageFile.name });
       const response = await client.post('/detect/classify', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       
-      // Giả lập độ trễ 1 chút để hiệu ứng quét chạy cho đẹp
       setTimeout(() => {
         setResult(response.data);
         setLoading(false);
-        stopScanAnimation();
-      }, 1500);
+      }, 1000); 
       
     } catch (error: any) {
-      Alert.alert('Lỗi', 'Không thể phân tích ảnh.');
+      Alert.alert('Lỗi chẩn đoán', 'Không thể kết nối với máy chủ AI.');
       setLoading(false);
-      stopScanAnimation();
     }
   };
 
   const scanTranslateY = scanAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 300] // Quét dọc theo chiều cao ảnh
+    outputRange: [0, 300]
   });
+
+  const isHealthy = result?.is_healthy;
+  const statusColor = isHealthy ? '#2e7d32' : '#FF5252';
 
   return (
     <View style={styles.container}>
+      <CustomHeader 
+        title="Chẩn Đoán Bệnh" 
+        subtitle="Chẩn đoán mẫu phân bằng AI"
+        rightComponent={
+          <View style={styles.headerIcon}>
+            <Icon name="microscope" size={24} color={PRIMARY_GREEN} />
+          </View>
+        }
+      />
+
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         
-        {/* 1. Khu vực ảnh (Hero Section) */}
-        <View style={styles.heroContainer}>
-          <View style={styles.imageWrapper}>
+        <View style={styles.scannerWrapper}>
+          <View style={[styles.scanFrame, result && { borderColor: statusColor, borderWidth: 2 }]}>
             {imageUri ? (
-              <>
-                <Image source={{ uri: imageUri }} style={styles.image} />
-                {loading && (
-                  <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanTranslateY }] }]} />
-                )}
-              </>
+              <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
             ) : (
-              <View style={styles.placeholder}>
-                <Icon name="scan-helper" size={80} color="#CFD8DC" />
-                <Text style={styles.placeholderTitle}>Chụp ảnh phân gà</Text>
-                <Text style={styles.placeholderSub}>AI sẽ phân tích và chẩn đoán bệnh ngay lập tức</Text>
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconCircle}>
+                  <Icon name="medical-bag" size={50} color="#B0BEC5" />
+                </View>
+                <Text style={styles.emptyTitle}>Chưa có mẫu vật</Text>
+                <Text style={styles.emptySub}>Vui lòng cung cấp ảnh chụp mẫu phân</Text>
               </View>
             )}
-            
-            {/* Nút chụp ảnh nổi (Floating Actions) */}
-            {!loading && (
-              <View style={styles.floatingActions}>
-                <TouchableOpacity style={styles.floatBtnSmall} onPress={() => handleSelectImage('library')}>
-                  <Icon name="image-outline" size={24} color="#333" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.floatBtnLarge} onPress={() => handleSelectImage('camera')}>
-                  <Icon name="camera" size={32} color="#fff" />
-                </TouchableOpacity>
 
-                {imageUri && (
-                  <TouchableOpacity style={[styles.floatBtnSmall, {backgroundColor: '#2e7d32'}]} onPress={handleAnalyze}>
-                    <Icon name="check" size={24} color="#fff" />
-                  </TouchableOpacity>
-                )}
+            {loading && (
+              <Animated.View style={[styles.laser, { transform: [{ translateY: scanTranslateY }] }]} />
+            )}
+
+            {result && (
+              <View style={[styles.resultTag, { backgroundColor: statusColor }]}>
+                <Icon name={isHealthy ? "check-circle" : "alert-decagram"} size={16} color="#fff" />
+                <Text style={styles.resultTagText}>
+                  {isHealthy ? "BÌNH THƯỜNG" : "PHÁT HIỆN BỆNH"}
+                </Text>
               </View>
             )}
           </View>
+
+          {!loading && !result && (
+            <View style={styles.controls}>
+              {imageUri ? (
+                <View style={styles.actionRow}>
+                  <Pressable style={styles.btnSub} onPress={() => {setImageUri(null); setImageFile(null);}}>
+                    <Icon name="close" size={24} color="#546E7A" />
+                  </Pressable>
+                  <Pressable 
+                    style={({pressed}) => [styles.btnMain, pressed && {transform: [{scale: 0.96}]}]} 
+                    onPress={handleAnalyze}
+                  >
+                    <Icon name="check-decagram" size={24} color="#fff" />
+                    <Text style={styles.btnMainText}>TIẾN HÀNH CHẨN ĐOÁN</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.pickers}>
+                  <Pressable style={styles.pickerBtn} onPress={() => handleSelectImage('library')}>
+                    <View style={[styles.pickerIcon, {backgroundColor: '#E8F5E9'}]}>
+                      <Icon name="image-outline" size={28} color={PRIMARY_GREEN} />
+                    </View>
+                    <Text style={styles.pickerLabel}>Thư viện</Text>
+                  </Pressable>
+                  <Pressable style={styles.pickerBtn} onPress={() => handleSelectImage('camera')}>
+                    <View style={[styles.pickerIcon, {backgroundColor: '#E8F5E9'}]}>
+                      <Icon name="camera-iris" size={32} color={PRIMARY_GREEN} />
+                    </View>
+                    <Text style={styles.pickerLabel}>Chụp mẫu</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* 2. Khu vực Kết quả (Result Section) */}
-        {result ? (
-          <View style={styles.resultContainer}>
-            <View style={styles.resultHeader}>
-              <View>
-                <Text style={styles.resultLabel}>KẾT QUẢ CHẨN ĐOÁN</Text>
-                <Text style={styles.diseaseName}>{result.disease_detail?.name_vi || result.disease}</Text>
-              </View>
-              <View style={[styles.confidenceBadge, { backgroundColor: result.is_healthy ? '#E8F5E9' : '#FFEBEE' }]}>
-                <Text style={[styles.confidenceText, { color: result.is_healthy ? '#2E7D32' : '#C62828' }]}>
-                  {(result.confidence * 100).toFixed(0)}%
-                </Text>
+        {result && (
+          <Animated.View style={[styles.reportContainer, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
+            <View style={styles.diagnosisCard}>
+              <Text style={styles.cardHeader}>KẾT QUẢ CHẨN ĐOÁN</Text>
+              <View style={styles.diagnosisRow}>
+                <View style={{flex: 1}}>
+                  <Text style={styles.diseaseName}>{result.disease_detail?.name_vi || result.disease}</Text>
+                  <Text style={styles.diseaseEng}>{result.disease_detail?.name_en || ""}</Text>
+                </View>
+                <View style={styles.confidenceCircle}>
+                  <Text style={[styles.confValue, {color: statusColor}]}>{(result.confidence * 100).toFixed(0)}%</Text>
+                  <Text style={styles.confLabel}>Chính xác</Text>
+                </View>
               </View>
             </View>
 
-            {result.disease_detail && (
-              <View>
-                {/* A. Thẻ Phác đồ (Giữ nguyên nhưng làm gọn lại) */}
-                <View style={styles.treatmentBox}>
-                  <View style={styles.treatmentHeader}>
-                    <Icon name="medical-bag" size={20} color="#fff" />
+            {!isHealthy && result.disease_detail && (
+              <>
+                <View style={styles.infoGroup}>
+                  <View style={styles.infoHeader}>
+                    <Icon name="alert-circle-outline" size={20} color="#FF7043" />
+                    <Text style={[styles.infoTitle, {color: DARK_GREEN}]}>TRIỆU CHỨNG NHẬN DIỆN</Text>
+                  </View>
+                  <Text style={styles.infoBody}>{result.disease_detail.symptoms}</Text>
+                </View>
+
+                <View style={styles.treatmentCard}>
+                  <View style={[styles.treatmentHeader, {backgroundColor: PRIMARY_GREEN}]}>
+                    <Icon name="medical-bag" size={22} color="#fff" />
                     <Text style={styles.treatmentTitle}>PHÁC ĐỒ ĐIỀU TRỊ</Text>
                   </View>
-                  
-                  <View style={styles.treatmentContent}>
+                  <View style={styles.treatmentBody}>
                     {result.disease_detail.treatment_steps?.map((step: any, index: number) => (
-                      <View key={step.id} style={styles.stepRow}>
-                        <View style={styles.stepIndicator}>
-                          <View style={styles.stepDot} />
+                      <View key={step.id} style={styles.stepItem}>
+                        <View style={styles.stepLeft}>
+                          <View style={[styles.stepCircle, {backgroundColor: PRIMARY_GREEN}]}>
+                            <Text style={styles.stepNum}>{step.step_order}</Text>
+                          </View>
                           {index < result.disease_detail.treatment_steps.length - 1 && <View style={styles.stepLine} />}
                         </View>
-                        <View style={styles.stepInfo}>
-                          <Text style={styles.stepName}>Bước {step.step_order}</Text>
+                        <View style={styles.stepContent}>
                           <Text style={styles.stepDesc}>{step.description}</Text>
-                          {step.medicines?.map((med: any) => (
-                            <View key={med.id} style={styles.pillTag}>
-                              <Icon name="pill" size={14} color="#1565C0" />
-                              <Text style={styles.pillText}>{med.name} • {med.dosage}</Text>
-                            </View>
-                          ))}
+                          <View style={styles.medsContainer}>
+                            {step.medicines?.map((med: any) => (
+                              <View key={med.id} style={styles.pill}>
+                                <Icon name="pill" size={14} color={PRIMARY_GREEN} />
+                                <Text style={[styles.pillText, {color: PRIMARY_GREEN}]}>{med.name} • {med.dosage}</Text>
+                              </View>
+                            ))}
+                          </View>
                         </View>
                       </View>
                     ))}
                   </View>
                 </View>
 
-                {/* B. Thẻ Thông tin chi tiết (Mới) */}
-                <View style={styles.detailCard}>
-                  <View style={styles.detailSection}>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="alert-circle-outline" size={18} color="#E65100" />
-                      <Text style={styles.sectionTitle}>Triệu chứng đặc trưng</Text>
-                    </View>
-                    <Text style={styles.sectionContent}>{result.disease_detail.symptoms}</Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="microscope" size={18} color="#455A64" />
-                      <Text style={styles.sectionTitle}>Nguyên nhân</Text>
-                    </View>
-                    <Text style={styles.sectionContent}>{result.disease_detail.cause}</Text>
-                  </View>
-
-                  <View style={styles.detailSection}>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="shield-check-outline" size={18} color="#2E7D32" />
-                      <Text style={styles.sectionTitle}>Cách phòng ngừa</Text>
-                    </View>
-                    <Text style={styles.sectionContent}>{result.disease_detail.prevention}</Text>
-                  </View>
-                </View>
-
-                {/* C. Nút hành động nhanh (Mới) */}
                 <TouchableOpacity 
-                  style={styles.chatActionBtn}
+                  style={[styles.chatBtn, {backgroundColor: PRIMARY_GREEN}]}
                   onPress={() => navigation.navigate('Chat', { 
-                    initialMessage: `Chào trợ lý, gà tôi vừa được chẩn đoán bị ${result.disease_detail.name_vi}. Hãy tư vấn thêm cho tôi cách chăm sóc.` 
+                    initialMessage: `Tôi muốn hỏi thêm về bệnh ${result.disease_detail.name_vi}. Phác đồ trên cần lưu ý gì không?` 
                   })}
                 >
-                  <Icon name="chat-question" size={22} color="#fff" />
-                  <Text style={styles.chatActionText}>Hỏi thêm trợ lý AI về bệnh này</Text>
+                  <Icon name="chat-question-outline" size={24} color="#fff" />
+                  <Text style={styles.chatBtnText}>HỎI Ý KIẾN CHUYÊN GIA AI</Text>
                 </TouchableOpacity>
+              </>
+            )}
+
+            {isHealthy && (
+              <View style={styles.healthyCard}>
+                <Icon name="check-decagram" size={60} color="#2e7d32" />
+                <Text style={[styles.healthyTitle, {color: '#2e7d32'}]}>Kết quả an toàn</Text>
+                <Text style={styles.healthyDesc}>
+                  AI không tìm thấy dấu hiệu bệnh lý trong mẫu phân này. Hãy tiếp tục theo dõi sức khỏe tổng quát của đàn gà.
+                </Text>
               </View>
             )}
-          </View>
-        ) : (
-          <View style={styles.guideContainer}>
-            <Text style={styles.guideTitle}>Hướng dẫn chụp ảnh</Text>
-            <View style={styles.guideItem}>
-              <Icon name="check-circle-outline" size={20} color="#2e7d32" />
-              <Text style={styles.guideText}>Giữ camera ổn định, tránh rung lắc</Text>
-            </View>
-            <View style={styles.guideItem}>
-              <Icon name="check-circle-outline" size={20} color="#2e7d32" />
-              <Text style={styles.guideText}>Đảm bảo đủ ánh sáng, rõ nét</Text>
-            </View>
-            <View style={styles.guideItem}>
-              <Icon name="check-circle-outline" size={20} color="#2e7d32" />
-              <Text style={styles.guideText}>Chụp cận cảnh mẫu phân hoặc gà</Text>
-            </View>
-          </View>
-        )}
 
-        <View style={{height: 100}} /> 
+            <TouchableOpacity style={styles.retryBtn} onPress={() => {setImageUri(null); setResult(null);}}>
+              <Text style={styles.retryText}>KIỂM TRA MẪU KHÁC</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+        <View style={{height: 100}} />
       </ScrollView>
     </View>
   );
@@ -232,112 +268,60 @@ const ClassifyScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   scrollContent: { flexGrow: 1 },
-  
-  // Hero Image
-  heroContainer: {
-    padding: 20,
-    paddingTop: 30,
-    alignItems: 'center',
-  },
-  imageWrapper: {
-    width: width - 40,
-    height: width - 40,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F3F4' },
-  placeholderTitle: { fontSize: 18, fontWeight: 'bold', color: '#546E7A', marginTop: 15 },
-  placeholderSub: { fontSize: 13, color: '#90A4AE', textAlign: 'center', marginTop: 5, maxWidth: '70%' },
-  
-  scanLine: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-    backgroundColor: '#00E676',
-    shadowColor: '#00E676', shadowOffset: {width: 0, height: 0}, shadowOpacity: 1, shadowRadius: 10, elevation: 5
-  },
-
-  // Floating Actions
-  floatingActions: {
-    position: 'absolute', bottom: 25, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20
-  },
-  floatBtnSmall: {
-    width: 45, height: 45, borderRadius: 22.5, backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center', alignItems: 'center', elevation: 5
-  },
-  floatBtnLarge: {
-    width: 60, height: 60, borderRadius: 30, backgroundColor: '#2E7D32',
-    justifyContent: 'center', alignItems: 'center', elevation: 8,
-    borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)'
-  },
-
-  // Result Section
-  resultContainer: { paddingHorizontal: 25, marginTop: 10 },
-  resultHeader: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 
-  },
-  resultLabel: { fontSize: 12, fontWeight: 'bold', color: '#90A4AE', letterSpacing: 1, marginBottom: 5 },
-  diseaseName: { fontSize: 26, fontWeight: '900', color: '#263238', maxWidth: '80%' },
-  confidenceBadge: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
-    justifyContent: 'center', alignItems: 'center'
-  },
-  confidenceText: { fontSize: 14, fontWeight: 'bold' },
-
-  // Treatment Box
-  treatmentBox: {
-    backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden',
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10
-  },
-  treatmentHeader: {
-    backgroundColor: '#2E7D32', padding: 15, flexDirection: 'row', alignItems: 'center', gap: 10
-  },
+  headerIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
+  scannerWrapper: { alignItems: 'center', marginHorizontal: 20, marginTop: 20 },
+  scanFrame: { width: CARD_WIDTH, height: CARD_WIDTH, borderRadius: 32, backgroundColor: '#fff', elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  image: { width: '100%', height: '100%' },
+  emptyState: { alignItems: 'center' },
+  emptyIconCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#F1F8E9', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#263238' },
+  emptySub: { fontSize: 13, color: '#90A4AE', marginTop: 5 },
+  laser: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: '#00E676', shadowColor: '#00E676', shadowOpacity: 1, shadowRadius: 10 },
+  resultTag: { position: 'absolute', top: 20, right: 20, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, elevation: 4 },
+  resultTagText: { color: '#fff', fontWeight: 'bold', fontSize: 11 },
+  controls: { marginTop: 25, width: '100%' },
+  pickers: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 20 },
+  pickerBtn: { alignItems: 'center' },
+  pickerIcon: { width: 64, height: 64, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 10, elevation: 4 },
+  pickerLabel: { fontSize: 14, fontWeight: '700', color: '#455A64' },
+  actionRow: { flexDirection: 'row', gap: 15, justifyContent: 'center', width: '100%', paddingHorizontal: 20 },
+  btnSub: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#ECEFF1', justifyContent: 'center', alignItems: 'center' },
+  btnMain: { flex: 1, height: 56, backgroundColor: '#2e7d32', borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, elevation: 6 },
+  btnMainText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  reportContainer: { paddingHorizontal: 20, marginTop: 25 },
+  diagnosisCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 20, elevation: 2, borderWidth: 1, borderColor: '#E8F5E9' },
+  cardHeader: { fontSize: 11, fontWeight: '900', color: '#90A4AE', marginBottom: 12, letterSpacing: 1 },
+  diagnosisRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  diseaseName: { fontSize: 24, fontWeight: '900', color: '#263238' },
+  diseaseEng: { fontSize: 14, color: '#78909C', fontStyle: 'italic', marginTop: 2 },
+  confidenceCircle: { alignItems: 'center' },
+  confValue: { fontSize: 22, fontWeight: '900' },
+  confLabel: { fontSize: 10, color: '#90A4AE', fontWeight: '700' },
+  infoGroup: { marginBottom: 20 },
+  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  infoTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  infoBody: { fontSize: 15, color: '#455A64', lineHeight: 22, backgroundColor: '#fff', padding: 16, borderRadius: 18, borderWidth: 1, borderColor: '#F1F8E9' },
+  treatmentCard: { backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOpacity: 0.05, marginBottom: 25 },
+  treatmentHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 },
   treatmentTitle: { color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
-  treatmentContent: { padding: 20 },
-  
-  stepRow: { flexDirection: 'row', marginBottom: 0 },
-  stepIndicator: { width: 30, alignItems: 'center' },
-  stepDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#2E7D32', marginTop: 5 },
-  stepLine: { width: 2, flex: 1, backgroundColor: '#E0E0E0', marginVertical: 5 },
-  stepInfo: { flex: 1, paddingBottom: 25 },
-  stepName: { fontSize: 14, fontWeight: 'bold', color: '#2E7D32', marginBottom: 4 },
-  stepDesc: { fontSize: 15, color: '#455A64', lineHeight: 22, marginBottom: 8 },
-  pillTag: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD',
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 5
-  },
-  pillText: { fontSize: 13, color: '#1565C0', fontWeight: '600', marginLeft: 6 },
-
-  // Detail Card
-  detailCard: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20, marginTop: 15,
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10
-  },
-  detailSection: { marginBottom: 15 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 5 },
-  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#263238' },
-  sectionContent: { fontSize: 14, color: '#546E7A', lineHeight: 20 },
-
-  // Quick Action
-  chatActionBtn: {
-    flexDirection: 'row', backgroundColor: '#1A237E', marginTop: 20,
-    padding: 15, borderRadius: 15, justifyContent: 'center', alignItems: 'center', gap: 10,
-    elevation: 4
-  },
-  chatActionText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-
-  // Guide
-  guideContainer: { padding: 30, opacity: 0.7 },
-  guideTitle: { fontSize: 16, fontWeight: 'bold', color: '#546E7A', marginBottom: 15 },
-  guideItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
-  guideText: { fontSize: 14, color: '#607D8B' }
+  treatmentBody: { padding: 20 },
+  stepItem: { flexDirection: 'row' },
+  stepLeft: { width: 40, alignItems: 'center' },
+  stepCircle: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', zIndex: 2 },
+  stepNum: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  stepLine: { width: 2, flex: 1, backgroundColor: '#E8F5E9', marginVertical: 4 },
+  stepContent: { flex: 1, paddingBottom: 30 },
+  stepDesc: { fontSize: 15, color: '#263238', marginBottom: 10, fontWeight: '600', lineHeight: 22 },
+  medsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F8E9', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10 },
+  pillText: { fontSize: 12, fontWeight: '800', marginLeft: 6 },
+  chatBtn: { borderRadius: 20, padding: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, elevation: 6, shadowColor: '#2e7d32', shadowOpacity: 0.2, marginBottom: 20 },
+  chatBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15, letterSpacing: 0.5 },
+  healthyCard: { backgroundColor: '#E8F5E9', padding: 35, borderRadius: 28, alignItems: 'center', marginBottom: 25, borderWidth: 1, borderColor: '#C8E6C9' },
+  healthyTitle: { fontSize: 22, fontWeight: '900', marginTop: 15, marginBottom: 10 },
+  healthyDesc: { fontSize: 14, color: '#388E3C', textAlign: 'center', lineHeight: 22 },
+  retryBtn: { padding: 15, alignItems: 'center' },
+  retryText: { color: '#90A4AE', fontWeight: 'bold', letterSpacing: 1 }
 });
 
 export default ClassifyScreen;

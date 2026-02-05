@@ -1,92 +1,77 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Pressable, Image, 
-  ScrollView, ActivityIndicator, Alert, Dimensions, Linking, Platform, PermissionsAndroid, Animated
+  ScrollView, ActivityIndicator, Alert, Dimensions, Animated, Easing, Platform, StatusBar, TouchableOpacity
 } from 'react-native';
 import { launchCamera, launchImageLibrary, MediaType } from 'react-native-image-picker';
-import { WebView } from 'react-native-webview';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import client from '../api/client';
+import CustomHeader from '../components/CustomHeader';
 
 const { width } = Dimensions.get('window');
+const CARD_WIDTH = width - 40;
 
-const DetectScreen = () => {
+const DetectScreen = ({ navigation }: any) => {
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaFile, setMediaFile] = useState<any>(null);
-  const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [videoResult, setVideoResult] = useState<any>(null);
-  const [showVideo, setShowVideo] = useState(false);
 
-  // Hiệu ứng nhấn nút
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const PRIMARY_GREEN = '#2e7d32';
+  const DARK_GREEN = '#1B5E20';
 
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, { toValue: 0.92, useNativeDriver: true }).start();
-  };
+  // Animations
+  const scanAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(100)).current;
 
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
-  };
+  useEffect(() => {
+    if (loading) startScanAnimation();
+    else stopScanAnimation();
+  }, [loading]);
 
-  const requestCameraPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: "Quyền truy cập Camera",
-            message: "Ứng dụng cần truy cập Camera để chụp ảnh/quay video đàn gà.",
-            buttonNeutral: "Hỏi lại sau",
-            buttonNegative: "Hủy",
-            buttonPositive: "Đồng ý"
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
+  useEffect(() => {
+    if (result) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.spring(slideUpAnim, { toValue: 0, friction: 6, useNativeDriver: true })
+      ]).start();
     }
-    return true;
+  }, [result]);
+
+  const startScanAnimation = () => {
+    scanAnim.setValue(0);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+      ])
+    ).start();
   };
 
-  const handleSelectMedia = async (source: 'camera' | 'library', type: 'photo' | 'video') => {
-    if (source === 'camera') {
-      const hasPermission = await requestCameraPermission();
-      if (!hasPermission) {
-        Alert.alert("Quyền bị từ chối", "Bạn cần cấp quyền Camera để sử dụng tính năng này.");
-        return;
-      }
-    }
+  const stopScanAnimation = () => {
+    scanAnim.stopAnimation();
+    scanAnim.setValue(0);
+  };
 
-    const options = { 
-      mediaType: type as MediaType, 
-      quality: 0.9, 
-      maxWidth: 1280, 
-      maxHeight: 1280,
-      durationLimit: 10,
-      videoQuality: 'medium' as const
-    };
-    
+  const scanTranslateY = scanAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 300]
+  });
+
+  const handleSelectMedia = (source: 'camera' | 'library') => {
+    const options = { mediaType: 'photo' as MediaType, quality: 0.9, maxWidth: 1280, maxHeight: 1280 };
     const callback = (response: any) => {
-      if (response.didCancel) return;
-      if (response.errorCode) {
-        Alert.alert('Lỗi Camera', response.errorMessage);
-        return;
-      }
+      if (response.didCancel || response.errorCode) return;
       if (response.assets?.[0]) {
         const asset = response.assets[0];
         setMediaUri(asset.uri);
-        setMediaType(type);
-        setMediaFile({ uri: asset.uri, type: asset.type || (type === 'video' ? 'video/mp4' : 'image/jpeg'), name: asset.fileName || `input.${type === 'video' ? 'mp4' : 'jpg'}` });
+        setMediaFile({ uri: asset.uri, type: asset.type || 'image/jpeg', name: asset.fileName || 'input.jpg' });
         setResult(null);
-        setVideoResult(null);
-        setShowVideo(false);
+        fadeAnim.setValue(0);
+        slideUpAnim.setValue(100);
       }
     };
-
     if (source === 'camera') launchCamera(options, callback);
     else launchImageLibrary(options, callback);
   };
@@ -97,219 +82,155 @@ const DetectScreen = () => {
     try {
       const formData = new FormData();
       formData.append('file', { uri: mediaFile.uri, type: mediaFile.type, name: mediaFile.name });
-      
-      let endpoint = '/detect/detect';
-      if (mediaType === 'video') {
-        endpoint = '/detect/video_analyze';
-      }
-
-      const response = await client.post(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      
-      if (mediaType === 'video') {
-        setVideoResult(response.data);
-      } else {
+      const response = await client.post('/detect/detect', formData, { 
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000 
+      });
+      setTimeout(() => {
         setResult(response.data);
-      }
+        setLoading(false);
+      }, 800);
     } catch (error: any) {
-      console.error(error);
-      Alert.alert('Lỗi', 'Không thể phân tích dữ liệu. Vui lòng thử lại.');
-    } finally {
+      Alert.alert('Lỗi', 'Không thể phân tích dữ liệu.');
       setLoading(false);
     }
   };
 
-  const getVideoHtml = (url: string) => {
-    // Dùng localhost vì đã có adb reverse proxy (ổn định hơn 10.0.2.2 trên một số máy)
-    const fullUrl = `http://localhost:8000${url}`;
-    
-    return `
-      <html>
-        <body style="margin:0;padding:0;background-color:#000;display:flex;justify-content:center;align-items:center;height:100%;">
-          <video 
-            src="${fullUrl}" 
-            width="100%" 
-            height="100%" 
-            controls 
-            autoplay 
-            style="max-width:100%;max-height:100%;"
-          >
-            Trình duyệt không hỗ trợ video.
-          </video>
-        </body>
-      </html>
-    `;
+  const resetScanner = () => {
+    setResult(null);
+    setMediaUri(null);
+    setMediaFile(null);
+  };
+
+  const getStatusColor = () => {
+    if (!result) return '#B0BEC5';
+    if (result.sick_count > 0) return '#FF5252'; 
+    return '#2e7d32'; 
   };
 
   return (
     <View style={styles.container}>
+      <CustomHeader 
+        title="Giám Sát Đàn" 
+        subtitle="AI nhận diện thời gian thực"
+        rightComponent={
+          <View style={styles.statusBadge}>
+            <View style={[styles.statusDot, { backgroundColor: loading ? PRIMARY_GREEN : '#00E676' }]} />
+            <Text style={styles.statusText}>{loading ? 'ĐANG QUÉT' : 'SẴN SÀNG'}</Text>
+          </View>
+        }
+      />
+
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         
-        {/* Top Monitor Area */}
-        <View style={styles.monitorContainer}>
-          <View style={styles.monitorWrapper}>
+        <View style={styles.scannerContainer}>
+          <View style={[styles.scannerFrame, result && { borderColor: getStatusColor(), borderWidth: 2 }]}>
             {result ? (
               <Image source={{ uri: `data:image/jpeg;base64,${result.image_base64}` }} style={styles.image} resizeMode="contain" />
-            ) : mediaType === 'video' && videoResult ? (
-               showVideo ? (
-                 // Hiển thị GIF động thay vì Video Player
-                 <Image 
-                    source={{ uri: `http://localhost:8000${videoResult.gif_url}` }} 
-                    style={styles.image} 
-                    resizeMode="contain" 
-                 />
-               ) : (
-                 <View style={styles.videoPlaceholder}>
-                   <Icon name="movie-check" size={60} color="#4CAF50" />
-                   <Text style={styles.videoSuccessText}>PHÂN TÍCH HOÀN TẤT</Text>
-                   <Pressable 
-                    style={({pressed}) => [styles.playBtn, pressed && {opacity: 0.8}]} 
-                    onPress={() => setShowVideo(true)}
-                   >
-                     <Icon name="play-circle" size={32} color="#fff" />
-                     <Text style={{color:'#fff', fontWeight:'bold'}}>XEM KẾT QUẢ</Text>
-                   </Pressable>
-                 </View>
-               )
             ) : mediaUri ? (
-              mediaType === 'video' ? (
-                <View style={styles.videoPlaceholder}>
-                  <Icon name="video" size={50} color="#1976D2" />
-                  <Text style={{color:'#555', marginTop:10}}>Video đã sẵn sàng</Text>
+              <Image source={{ uri: mediaUri }} style={styles.image} resizeMode="cover" />
+            ) : (
+              <View style={styles.placeholderState}>
+                <View style={styles.iconCircle}>
+                  <Icon name="radar" size={60} color="#B0BEC5" />
+                </View>
+                <Text style={styles.placeholderText}>Chưa có hình ảnh</Text>
+                <Text style={styles.placeholderHint}>Hệ thống đang chờ dữ liệu quan sát</Text>
+              </View>
+            )}
+
+            {loading && (
+              <Animated.View style={[styles.laserLine, { transform: [{ translateY: scanTranslateY }] }]} />
+            )}
+            
+            {result && (
+              <View style={[styles.resultLabelTag, { backgroundColor: getStatusColor() }]}>
+                <Icon name={result.sick_count > 0 ? "alert-decagram" : "check-decagram"} size={16} color="#fff" />
+                <Text style={styles.resultLabelText}>
+                  {result.sick_count > 0 ? "PHÁT HIỆN BẤT THƯỜNG" : "TRẠNG THÁI TỐT"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {!loading && !result && (
+            <View style={styles.controlBar}>
+              {mediaUri ? (
+                <View style={styles.actionRow}>
+                  <Pressable style={styles.btnSecondary} onPress={resetScanner}>
+                    <Icon name="close" size={24} color="#546E7A" />
+                  </Pressable>
+                  
+                  <Pressable 
+                    style={({pressed}) => [styles.btnPrimary, pressed && {transform: [{scale: 0.96}]}]} 
+                    onPress={handleAnalyze}
+                  >
+                    <Icon name="feature-search-outline" size={24} color="#fff" />
+                    <Text style={styles.btnPrimaryText}>CHẨN ĐOÁN AI</Text>
+                  </Pressable>
                 </View>
               ) : (
-                <Image source={{ uri: mediaUri }} style={styles.image} />
-              )
-            ) : (
-              <View style={styles.placeholder}>
-                <Icon name="radar" size={80} color="#CFD8DC" />
-                <Text style={styles.placeholderTitle}>Chế độ Giám sát</Text>
-                <Text style={styles.placeholderSub}>AI sẽ quét và đếm số lượng gà khỏe/ốm trong đàn</Text>
-              </View>
-            )}
-          </View>
-          
-          {/* Controls Area */}
-          <View style={styles.controlsArea}>
-            {loading && (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator color="#2196F3" size="small" />
-                <Text style={styles.loadingTextSmall}>
-                  {mediaType === 'video' ? 'Đang xử lý video...' : 'Đang phân tích...'}
-                </Text>
-              </View>
-            )}
-
-            {!loading && !result && !videoResult && (
-              <View style={styles.actionButtons}>
-                {/* Library Button */}
-                <Animated.View style={{ transform: [{ scale: mediaType === 'photo' && !mediaUri ? 1 : 1 }] }}>
-                  <Pressable 
-                    onPressIn={handlePressIn}
-                    onPressOut={handlePressOut}
-                    onPress={() => handleSelectMedia('library', 'photo')}
-                    style={styles.btnOption}
-                  >
-                    <View style={[styles.iconCircle, {backgroundColor: '#f5f5f5'}]}>
-                      <Icon name="image-multiple" size={24} color="#455A64" />
+                <View style={styles.mediaRow}>
+                  <Pressable style={styles.mediaBtn} onPress={() => handleSelectMedia('library')}>
+                    <View style={[styles.mediaIcon, {backgroundColor: '#E8F5E9'}]}>
+                      <Icon name="image-multiple" size={28} color={PRIMARY_GREEN} />
                     </View>
-                    <Text style={styles.btnLabel}>Thư viện</Text>
+                    <Text style={styles.mediaLabel}>Thư viện</Text>
                   </Pressable>
-                </Animated.View>
-                
-                {/* Photo Button */}
-                <Pressable 
-                  onPress={() => handleSelectMedia('camera', 'photo')}
-                  style={styles.btnMain}
-                >
-                  {({ pressed }) => (
-                    <View style={{alignItems: 'center'}}>
-                      <View style={[
-                        styles.iconCircleLarge, 
-                        {backgroundColor: '#1976D2', transform: [{ scale: pressed ? 0.9 : 1 }]}
-                      ]}>
-                        <Icon name="camera" size={32} color="#fff" />
-                      </View>
-                      <Text style={styles.btnLabelMain}>Chụp ảnh</Text>
-                    </View>
-                  )}
-                </Pressable>
 
-                {/* Video Button */}
-                <Pressable 
-                  onPress={() => handleSelectMedia('camera', 'video')}
-                  style={styles.btnMain}
-                >
-                  {({ pressed }) => (
-                    <View style={{alignItems: 'center'}}>
-                      <View style={[
-                        styles.iconCircleLarge, 
-                        {backgroundColor: '#E64A19', transform: [{ scale: pressed ? 0.9 : 1 }]}
-                      ]}>
-                        <Icon name="video" size={32} color="#fff" />
-                      </View>
-                      <Text style={styles.btnLabelMain}>Quay video</Text>
+                  <Pressable style={styles.mediaBtn} onPress={() => handleSelectMedia('camera')}>
+                    <View style={[styles.mediaIcon, {backgroundColor: '#E8F5E9'}]}>
+                      <Icon name="camera-iris" size={32} color={PRIMARY_GREEN} />
                     </View>
-                  )}
-                </Pressable>
-              </View>
-            )}
-            
-            {mediaUri && !loading && !result && !videoResult && (
-               <Pressable 
-                onPress={handleAnalyze}
-                style={({ pressed }) => [
-                  styles.analyzeBtn,
-                  pressed && { backgroundColor: '#1A237E', transform: [{ scale: 0.95 }] }
-                ]}
-               >
-                 <Text style={styles.analyzeText}>BẮT ĐẦU QUÉT</Text>
-                 <Icon name="arrow-right" size={20} color="#fff" />
-               </Pressable>
-            )}
-          </View>
-
+                    <Text style={styles.mediaLabel}>Chụp ảnh</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* Dashboard Stats */}
-        {(result || videoResult) && (
-          <View style={styles.dashboard}>
-            <View style={styles.row}>
-              <View style={[styles.statItem, {backgroundColor: '#E3F2FD'}]}>
-                <Text style={styles.statLabel}>TỔNG ĐÀN</Text>
-                <Text style={[styles.statValue, {color: '#1976D2'}]}>
-                  {result ? result.total_chickens : videoResult.max_total_chickens}
-                </Text>
+        {result && (
+          <Animated.View style={[styles.resultDashboard, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
+            <View style={styles.statsRow}>
+              <View style={[styles.statCard, { backgroundColor: '#F1F8E9' }]}>
+                <Text style={styles.statTitle}>TỔNG ĐÀN</Text>
+                <Text style={styles.statNumber}>{result.total_chickens}</Text>
               </View>
-              <View style={[styles.statItem, {backgroundColor: '#FFEBEE'}]}>
-                <Text style={styles.statLabel}>BỆNH (MAX)</Text>
-                <Text style={[styles.statValue, {color: '#C62828'}]}>
-                  {result ? result.sick_count : videoResult.max_sick_chickens}
-                </Text>
+              <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
+                <Text style={[styles.statTitle, {color: '#2E7D32'}]}>KHỎE MẠNH</Text>
+                <Text style={[styles.statNumber, {color: '#2E7D32'}]}>{result.healthy_count}</Text>
+              </View>
+              <View style={[styles.statCard, { backgroundColor: result.sick_count > 0 ? '#FFEBEE' : '#FAFAFA' }]}>
+                <Text style={[styles.statTitle, {color: result.sick_count > 0 ? '#C62828' : '#B0BEC5'}]}>BỆNH</Text>
+                <Text style={[styles.statNumber, {color: result.sick_count > 0 ? '#C62828' : '#B0BEC5'}]}>{result.sick_count}</Text>
               </View>
             </View>
 
-            <View style={[styles.alertCard, { borderColor: (result?.sick_count > 0 || videoResult?.max_sick_chickens > 0) ? '#FFCDD2' : '#C8E6C9' }]}>
-              <View style={[styles.alertHeader, { backgroundColor: (result?.sick_count > 0 || videoResult?.max_sick_chickens > 0) ? '#D32F2F' : '#388E3C' }]}>
-                <Icon name="alert-circle-outline" size={20} color="#fff" />
-                <Text style={styles.alertTitle}>KẾT QUẢ PHÂN TÍCH</Text>
+            <View style={styles.reportCard}>
+              <View style={styles.reportHeader}>
+                <Icon name="file-chart-outline" size={22} color={DARK_GREEN} />
+                <Text style={[styles.reportTitle, {color: DARK_GREEN}]}>Báo cáo chẩn đoán</Text>
               </View>
-              <View style={styles.alertBody}>
-                <Text style={styles.alertMsg}>
-                  {result ? result.alert : videoResult.alert || 'Không phát hiện dấu hiệu bất thường.'}
-                </Text>
-              </View>
+              <Text style={styles.reportText}>
+                {result.sick_count === 0 
+                  ? "Tuyệt vời! Hệ thống không phát hiện bất kỳ cá thể nào có dấu hiệu bệnh lý. Hãy duy trì điều kiện chăm sóc hiện tại." 
+                  : `Cảnh báo: Đã phát hiện ${result.sick_count} cá thể có triệu chứng ủ rũ hoặc bất thường. Bạn nên cách ly ngay để tránh lây lan.`}
+              </Text>
             </View>
-            
-            <Pressable 
-              style={({pressed}) => [styles.resetBtn, pressed && {backgroundColor: '#f5f5f5'}]} 
-              onPress={() => {setResult(null); setVideoResult(null); setMediaUri(null); setShowVideo(false);}}
-            >
-              <Text style={styles.resetBtnText}>QUÉT MỚI</Text>
-            </Pressable>
-          </View>
+
+            <View style={styles.finalActions}>
+              <TouchableOpacity style={styles.btnOutline} onPress={resetScanner}>
+                <Text style={styles.btnOutlineText}>QUÉT LẠI</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btnSolid, {backgroundColor: PRIMARY_GREEN}]}>
+                <Icon name="content-save-check-outline" size={20} color="#fff" />
+                <Text style={styles.btnSolidText}>LƯU NHẬT KÝ</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         )}
-
-        <View style={{height: 50}} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
@@ -317,95 +238,43 @@ const DetectScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  scrollContent: { flexGrow: 1 },
-  monitorContainer: { padding: 20, paddingTop: 30 },
-  monitorWrapper: {
-    width: width - 40,
-    height: 350, // Giảm chiều cao chút để nhường chỗ cho nút
-    borderRadius: 25,
-    backgroundColor: '#fff',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 20
-  },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  
-  // New Controls Styles
-  controlsArea: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingHorizontal: 10
-  },
-  btnOption: { alignItems: 'center', marginHorizontal: 10 },
-  btnMain: { alignItems: 'center', marginHorizontal: 10 },
-  
-  iconCircle: {
-    width: 50, height: 50, borderRadius: 25, 
-    justifyContent: 'center', alignItems: 'center', marginBottom: 5,
-    elevation: 2
-  },
-  iconCircleLarge: {
-    width: 65, height: 65, borderRadius: 35, 
-    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
-    elevation: 5,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5
-  },
-  
-  btnLabel: { fontSize: 12, color: '#555', fontWeight: '500' },
-  btnLabelMain: { fontSize: 13, color: '#333', fontWeight: 'bold' },
-
-  loadingBox: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 },
-  loadingTextSmall: { color: '#1976D2', fontWeight: '600' },
-
-  analyzeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#2962FF', paddingVertical: 14, paddingHorizontal: 40,
-    borderRadius: 30, elevation: 5, marginTop: 10
-  },
-  analyzeText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-  placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F3F4' },
-  placeholderTitle: { fontSize: 18, fontWeight: 'bold', color: '#546E7A', marginTop: 15 },
-  placeholderSub: { fontSize: 13, color: '#90A4AE', textAlign: 'center', marginTop: 5, paddingHorizontal: 40 },
-  
-  videoPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#E0F2F1' },
-  videoSuccessText: { marginTop: 10, fontSize: 16, fontWeight: 'bold', color: '#2E7D32' },
-  playBtn: { 
-    flexDirection: 'row', alignItems: 'center', gap: 10, 
-    backgroundColor: '#43A047', paddingVertical: 10, paddingHorizontal: 20, 
-    borderRadius: 30, marginTop: 20, elevation: 5
-  },
-
-  dashboard: { paddingHorizontal: 20, marginTop: 10 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 20 },
-  statItem: { flex: 1, padding: 15, borderRadius: 15, alignItems: 'center' },
-  statLabel: { fontSize: 10, fontWeight: 'bold', color: '#78909C', marginBottom: 5 },
-  statValue: { fontSize: 24, fontWeight: '900' },
-
-  alertCard: { backgroundColor: '#fff', borderRadius: 15, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
-  alertHeader: { padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  alertTitle: { color: '#fff', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
-  alertBody: { padding: 15 },
-  alertMsg: { fontSize: 14, color: '#455A64', lineHeight: 20 },
-
-  resetBtn: {
-    backgroundColor: '#fff', padding: 15, borderRadius: 12, alignItems: 'center',
-    borderWidth: 1, borderColor: '#1976D2'
-  },
-  resetBtnText: { color: '#1976D2', fontWeight: 'bold', letterSpacing: 1 },
-
-  infoSection: { padding: 30, opacity: 0.8 },
-  infoTitle: { fontSize: 16, fontWeight: 'bold', color: '#1976D2', marginBottom: 10 },
-  infoDesc: { fontSize: 14, color: '#607D8B', lineHeight: 22 }
+  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, elevation: 2 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  statusText: { fontSize: 10, fontWeight: 'bold', color: '#546E7A' },
+  scannerContainer: { alignItems: 'center', marginHorizontal: 20, marginTop: 20 },
+  scannerFrame: { width: CARD_WIDTH, height: CARD_WIDTH * 0.85, borderRadius: 28, backgroundColor: '#fff', elevation: 8, overflow: 'hidden', position: 'relative', justifyContent: 'center', alignItems: 'center' },
+  image: { width: '100%', height: '100%' },
+  placeholderState: { alignItems: 'center' },
+  iconCircle: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#F1F8E9', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  placeholderText: { fontSize: 18, fontWeight: 'bold', color: '#263238' },
+  placeholderHint: { fontSize: 13, color: '#90A4AE', marginTop: 5 },
+  laserLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: '#00E676', shadowColor: '#00E676', shadowOpacity: 1, shadowRadius: 10 },
+  resultLabelTag: { position: 'absolute', top: 20, left: 20, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12, elevation: 4 },
+  resultLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
+  controlBar: { marginTop: 30, width: '100%' },
+  mediaRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 20 },
+  mediaBtn: { alignItems: 'center' },
+  mediaIcon: { width: 70, height: 70, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 10, elevation: 4 },
+  mediaLabel: { fontSize: 14, fontWeight: '700', color: '#455A64' },
+  actionRow: { flexDirection: 'row', gap: 15, justifyContent: 'center', width: '100%', paddingHorizontal: 20 },
+  btnSecondary: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#ECEFF1', justifyContent: 'center', alignItems: 'center' },
+  btnPrimary: { flex: 1, height: 56, backgroundColor: '#2e7d32', borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, elevation: 6 },
+  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  resultDashboard: { marginTop: 30, paddingHorizontal: 20 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  statCard: { flex: 1, padding: 15, borderRadius: 18, alignItems: 'center', height: 100, justifyContent: 'center' },
+  statTitle: { fontSize: 10, fontWeight: 'bold', color: '#546E7A', marginBottom: 6 },
+  statNumber: { fontSize: 24, fontWeight: '900', color: '#263238' },
+  reportCard: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginTop: 20, borderWidth: 1, borderColor: '#E8F5E9' },
+  reportHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  reportTitle: { fontSize: 16, fontWeight: 'bold' },
+  reportText: { fontSize: 14, color: '#546E7A', lineHeight: 22 },
+  finalActions: { flexDirection: 'row', gap: 12, marginTop: 25 },
+  btnOutline: { flex: 1, height: 52, borderRadius: 16, borderWidth: 1, borderColor: '#CFD8DC', justifyContent: 'center', alignItems: 'center' },
+  btnOutlineText: { color: '#78909C', fontWeight: 'bold' },
+  btnSolid: { flex: 2, height: 52, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, elevation: 4 },
+  btnSolidText: { color: '#fff', fontWeight: 'bold' }
 });
 
 export default DetectScreen;

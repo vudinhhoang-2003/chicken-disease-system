@@ -1,232 +1,177 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar, Image, Dimensions } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useContext } from 'react';
+import { 
+  View, Text, StyleSheet, TouchableOpacity, Image, 
+  ScrollView, Dimensions, StatusBar, SafeAreaView 
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useFocusEffect } from '@react-navigation/native';
-import client from '../api/client';
+import { AuthContext } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }: any) => {
-  const [stats, setStats] = useState({ total_scans: 0, sick_cases: 0, accuracy: 0 });
-  const [userName, setUserName] = useState('Người dùng');
+  const { user, logout } = useContext(AuthContext);
 
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
-    navigation.replace('Login');
-  };
-
-  const fetchStats = async () => {
-    try {
-      const response = await client.get('/users/me/stats');
-      setStats(response.data);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    }
-  };
-
-  const fetchUserProfile = async () => {
-    try {
-      const response = await client.get('/users/me');
-      setUserName(response.data.full_name);
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchStats();
-      fetchUserProfile();
-    }, [])
-  );
+  const PRIMARY_GREEN = '#2e7d32';
+  const DARK_GREEN = '#1B5E20';
 
   const menuItems = [
-    { title: 'Chẩn đoán bệnh', subtitle: 'Phân tích qua phân', icon: 'microscope', screen: 'Classify', color: '#4caf50' },
-    { title: 'Kiểm tra đàn', subtitle: 'Phát hiện gà ốm', icon: 'camera-burst', screen: 'Detect', color: '#2196f3' },
-    { title: 'Hỏi đáp AI', subtitle: 'Trợ lý ảo 24/7', icon: 'robot', screen: 'Chat', color: '#00bcd4' },
-    { title: 'Kiến thức', subtitle: 'Cẩm nang chăn nuôi', icon: 'book-open-variant', screen: 'Knowledge', color: '#ff9800' },
-    { title: 'Nhật ký sức khỏe', subtitle: 'Xem lại lịch sử', icon: 'history', screen: 'History', color: '#673ab7', fullWidth: true },
+    {
+      title: 'Giám sát đàn',
+      subtitle: 'Phát hiện gà ốm AI',
+      icon: 'radar',
+      color: '#2e7d32',
+      bg: '#E8F5E9',
+      screen: 'Detect'
+    },
+    {
+      title: 'Chẩn đoán phân',
+      subtitle: 'Chẩn đoán bệnh qua mẫu phân',
+      icon: 'microscope',
+      color: '#388E3C',
+      bg: '#F1F8E9',
+      screen: 'Classify'
+    },
+    {
+      title: 'Trợ lý ảo AI',
+      subtitle: 'Tư vấn chuyên gia',
+      icon: 'robot-confused-outline',
+      color: '#f57c00', // Accent from Web Admin
+      bg: '#FFF3E0',
+      screen: 'Chat'
+    },
+    {
+      title: 'Cẩm nang',
+      subtitle: 'Kỹ thuật chăn nuôi',
+      icon: 'book-open-page-variant',
+      color: '#689F38',
+      bg: '#F9FBE7',
+      screen: 'Knowledge'
+    },
+    {
+      title: 'Nhật ký',
+      subtitle: 'Lịch sử theo dõi',
+      icon: 'history',
+      color: '#455A64',
+      bg: '#ECEFF1',
+      screen: 'History'
+    }
   ];
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#2e7d32" barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={PRIMARY_GREEN} />
       
       {/* Header Section */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Xin chào, {userName}</Text>
-            <Text style={styles.appName}>ChickHealth Dashboard</Text>
+            <Text style={styles.greeting}>Xin chào,</Text>
+            <Text style={styles.username}>{user?.full_name || 'Người chăn nuôi'}</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <Icon name="logout" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
-
-        {/* Stats Banner */}
-        <View style={styles.statsCard}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.total_scans}</Text>
-            <Text style={styles.statLabel}>Chẩn đoán</Text>
+        
+        {/* Farm Status Card */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusInfo}>
+            <View style={styles.iconCircle}>
+              <Icon name="home-modern" size={28} color={PRIMARY_GREEN} />
+            </View>
+            <View style={{marginLeft: 12}}>
+              <Text style={styles.statusTitle}>Sức khỏe đàn gà</Text>
+              <Text style={styles.statusSub}>Đàn gà đang phát triển tốt</Text>
+            </View>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.sick_cases}</Text>
-            <Text style={styles.statLabel}>Bệnh lạ</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.accuracy}%</Text>
-            <Text style={styles.statLabel}>Chính xác</Text>
+          <View style={styles.badge}>
+            <View style={styles.dot} />
+            <Text style={styles.badgeText}>KHỎE MẠNH</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Dịch vụ chính</Text>
+      {/* Body Section */}
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Tính năng thông minh</Text>
+          <Icon name="star-four-points" size={18} color={PRIMARY_GREEN} />
+        </View>
         
         <View style={styles.grid}>
           {menuItems.map((item, index) => (
             <TouchableOpacity 
               key={index} 
-              style={[styles.card, item.fullWidth && { width: '100%', flexDirection: 'row', aspectRatio: undefined, height: 80 }]}
+              style={[styles.card, { backgroundColor: '#fff', borderLeftWidth: 4, borderLeftColor: item.color }]}
               onPress={() => navigation.navigate(item.screen)}
-              activeOpacity={0.9}
+              activeOpacity={0.8}
             >
-              <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }, item.fullWidth && { marginBottom: 0, marginRight: 15 }]}>
-                <Icon name={item.icon} size={item.fullWidth ? 28 : 32} color={item.color} />
+              <View style={[styles.iconBox, { backgroundColor: item.bg }]}>
+                <Icon name={item.icon} size={26} color={item.color} />
               </View>
               <View>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                <Text style={[styles.cardTitle, { color: DARK_GREEN }]}>{item.title}</Text>
+                <Text style={styles.cardSub}>{item.subtitle}</Text>
               </View>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={{ height: 30 }} />
+        <View style={{height: 30}} />
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
   header: {
     backgroundColor: '#2e7d32',
-    paddingTop: 40,
-    paddingBottom: 60, // Make room for stats card
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 40,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    elevation: 10,
+    shadowColor: '#2e7d32', shadowOpacity: 0.3, shadowRadius: 15, shadowOffset: {width: 0, height: 10}
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  greeting: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500' },
+  username: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 2, letterSpacing: -0.5 },
+  logoutBtn: { padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14 },
+
+  statusCard: {
+    flexDirection: 'row', backgroundColor: '#fff',
+    borderRadius: 20, padding: 16, justifyContent: 'space-between', alignItems: 'center',
+    elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10
   },
-  greeting: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-  },
-  appName: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  logoutBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
-    position: 'absolute',
-    bottom: -40,
-    left: 20,
-    right: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2e7d32',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#7f8c8d',
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: '60%',
-    backgroundColor: '#eee',
-  },
-  scrollContent: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-    marginTop: 10,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
+  statusInfo: { flexDirection: 'row', alignItems: 'center' },
+  iconCircle: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
+  statusTitle: { color: '#263238', fontSize: 15, fontWeight: 'bold' },
+  statusSub: { color: '#90A4AE', fontSize: 12, marginTop: 2 },
+  badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2e7d32', marginRight: 6 },
+  badgeText: { color: '#2e7d32', fontSize: 10, fontWeight: '900' },
+
+  body: { paddingHorizontal: 24, paddingTop: 30 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#263238', letterSpacing: -0.5 },
+  
+  grid: { gap: 15 },
   card: {
-    width: (width - 50) / 2,
+    width: '100%',
+    padding: 16, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center',
+    elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
   },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+  iconBox: {
+    width: 54, height: 54, borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center', marginRight: 16
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#999',
-  },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 2 },
+  cardSub: { fontSize: 13, color: '#78909C' }
 });
 
 export default HomeScreen;

@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TextInput, 
   TouchableOpacity, KeyboardAvoidingView, Platform, 
-  ActivityIndicator, SafeAreaView
+  ActivityIndicator, SafeAreaView, StatusBar
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Markdown from 'react-native-markdown-display';
 import client from '../api/client';
+import CustomHeader from '../components/CustomHeader';
 
 interface Message {
   id: string;
@@ -20,7 +21,11 @@ interface Message {
   };
 }
 
-const ChatScreen = () => {
+const ChatScreen = ({ route }: any) => {
+  const initialMessage = route.params?.initialMessage;
+  const PRIMARY_GREEN = '#2e7d32';
+  const LIGHT_GREEN = '#E8F5E9';
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -33,29 +38,37 @@ const ChatScreen = () => {
   const [loading, setLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  useEffect(() => {
+    if (initialMessage) {
+      handleAutoSend(initialMessage);
+    }
+  }, [initialMessage]);
+
+  const handleAutoSend = (msg: string) => {
+    const userMsg: Message = { id: Date.now().toString(), text: msg, sender: 'user', timestamp: new Date() };
+    setMessages(prev => [...prev, userMsg]);
+    setLoading(true);
+    callApi(msg, [userMsg]); 
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim()) return;
-
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      sender: 'user',
-      timestamp: new Date(),
-    };
-
+    const userMsg: Message = { id: Date.now().toString(), text: inputText.trim(), sender: 'user', timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
     setLoading(true);
+    await callApi(userMsg.text, [...messages, userMsg]);
+  };
 
+  const callApi = async (msgText: string, history: Message[]) => {
     try {
       const response = await client.post('/chat/ask', {
-        message: userMsg.text,
-        history: messages.slice(-5).map(m => ({
+        message: msgText,
+        history: history.slice(-5).map(m => ({
           role: m.sender === 'user' ? 'user' : 'ai',
           content: m.text
         }))
       });
-
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         text: response.data.answer,
@@ -63,13 +76,11 @@ const ChatScreen = () => {
         timestamp: new Date(),
         usage: response.data.usage,
       };
-
       setMessages(prev => [...prev, aiMsg]);
     } catch (error) {
-      console.error(error);
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Xin lỗi, tôi đang gặp chút trục trặc kết nối. Bạn vui lòng thử lại sau nhé!',
+        text: 'Xin lỗi, kết nối đang gặp gián đoạn. Bà con vui lòng kiểm tra lại mạng nhé!',
         sender: 'ai',
         timestamp: new Date(),
       };
@@ -90,11 +101,11 @@ const ChatScreen = () => {
     return (
       <View style={[styles.messageRow, isUser ? styles.userRow : styles.aiRow]}>
         {!isUser && (
-          <View style={styles.aiAvatar}>
-            <Icon name="robot" size={20} color="#fff" />
+          <View style={[styles.aiAvatar, {backgroundColor: PRIMARY_GREEN}]}>
+            <Icon name="robot-confused-outline" size={20} color="#fff" />
           </View>
         )}
-        <View style={[styles.bubble, isUser ? styles.userBubble : styles.aiBubble]}>
+        <View style={[styles.bubble, isUser ? [styles.userBubble, {backgroundColor: PRIMARY_GREEN}] : styles.aiBubble]}>
           {isUser ? (
             <Text style={styles.userText}>{item.text}</Text>
           ) : (
@@ -102,7 +113,7 @@ const ChatScreen = () => {
               {item.text}
             </Markdown>
           )}
-          <Text style={[styles.timeText, isUser && { color: 'rgba(255,255,255,0.6)' }]}>
+          <Text style={[styles.timeText, isUser ? { color: 'rgba(255,255,255,0.7)' } : { color: '#90A4AE' }]}>
             {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
@@ -111,11 +122,12 @@ const ChatScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <CustomHeader title="Trợ lý AI" subtitle="Tư vấn chăn nuôi 24/7" />
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 100}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <FlatList
           ref={flatListRef}
@@ -128,8 +140,8 @@ const ChatScreen = () => {
 
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#2e7d32" />
-            <Text style={styles.loadingText}>ChickHealth đang suy nghĩ...</Text>
+            <View style={[styles.typingDot, {backgroundColor: PRIMARY_GREEN}]} />
+            <Text style={styles.loadingText}>Bác sĩ AI đang trả lời...</Text>
           </View>
         )}
 
@@ -137,70 +149,55 @@ const ChatScreen = () => {
           <TextInput
             style={styles.input}
             placeholder="Nhập câu hỏi của bạn..."
-            placeholderTextColor="#999"
+            placeholderTextColor="#90A4AE"
             value={inputText}
             onChangeText={setInputText}
             multiline
           />
           <TouchableOpacity 
-            style={[styles.sendBtn, !inputText.trim() && styles.disabledBtn]} 
+            style={[styles.sendBtn, !inputText.trim() && styles.disabledBtn, inputText.trim() && {backgroundColor: PRIMARY_GREEN}]} 
             onPress={sendMessage}
             disabled={!inputText.trim() || loading}
           >
-            <Icon name="send" size={24} color="#fff" />
+            <Icon name="send" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const markdownStyles = StyleSheet.create({
-  body: { color: '#333', fontSize: 15, lineHeight: 22 },
-  strong: { fontWeight: 'bold', color: '#000' },
+  body: { color: '#37474F', fontSize: 15, lineHeight: 22 },
+  strong: { fontWeight: 'bold', color: '#1B5E20' },
   em: { fontStyle: 'italic' },
-  heading1: { fontSize: 20, fontWeight: 'bold', color: '#2e7d32', marginVertical: 5 },
-  heading2: { fontSize: 18, fontWeight: 'bold', color: '#2e7d32', marginVertical: 5 },
+  heading1: { fontSize: 18, fontWeight: 'bold', color: '#2e7d32', marginVertical: 8 },
+  heading2: { fontSize: 16, fontWeight: 'bold', color: '#2e7d32', marginVertical: 6 },
   bullet_list: { marginVertical: 5 },
   ordered_list: { marginVertical: 5 },
-  paragraph: { marginVertical: 2 },
-  link: { color: '#1e88e5', textDecorationLine: 'underline' },
+  paragraph: { marginVertical: 4 },
+  link: { color: '#2e7d32', textDecorationLine: 'underline' },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f2f5' },
-  listContent: { padding: 15, paddingBottom: 20 },
-  messageRow: { flexDirection: 'row', marginBottom: 15, alignItems: 'flex-end' },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  listContent: { padding: 16, paddingBottom: 20 },
+  messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
   userRow: { justifyContent: 'flex-end' },
   aiRow: { justifyContent: 'flex-start' },
-  aiAvatar: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: '#2e7d32',
-    justifyContent: 'center', alignItems: 'center', marginRight: 8
-  },
-  bubble: {
-    maxWidth: '85%', padding: 12, borderRadius: 18,
-    elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2,
-  },
-  userBubble: { backgroundColor: '#2e7d32', borderBottomRightRadius: 2 },
-  aiBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 2 },
+  aiAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 10, elevation: 2 },
+  bubble: { maxWidth: '80%', padding: 14, borderRadius: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2 },
+  userBubble: { borderBottomRightRadius: 4, shadowOpacity: 0.2 },
+  aiBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#E8F5E9' },
   userText: { color: '#fff', fontSize: 15, lineHeight: 22 },
-  timeText: { fontSize: 10, color: 'rgba(0,0,0,0.3)', marginTop: 4, alignSelf: 'flex-end' },
-  loadingContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
-  loadingText: { fontSize: 12, color: '#2e7d32', fontStyle: 'italic', marginLeft: 8 },
-  inputContainer: {
-    flexDirection: 'row', padding: 10, backgroundColor: '#fff',
-    alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e0e0e0',
-  },
-  input: {
-    flex: 1, backgroundColor: '#f0f2f5', borderRadius: 25,
-    paddingHorizontal: 15, paddingVertical: 8, maxHeight: 100,
-    fontSize: 15, color: '#333',
-  },
-  sendBtn: {
-    width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#2e7d32',
-    justifyContent: 'center', alignItems: 'center', marginLeft: 10
-  },
-  disabledBtn: { backgroundColor: '#ccc' }
+  timeText: { fontSize: 10, marginTop: 6, alignSelf: 'flex-end' },
+  loadingContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
+  typingDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, opacity: 0.6 },
+  loadingText: { fontSize: 12, color: '#78909C', fontStyle: 'italic' },
+  inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#fff', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E8F5E9', paddingBottom: Platform.OS === 'ios' ? 25 : 12 },
+  input: { flex: 1, backgroundColor: '#F1F8E9', borderRadius: 24, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 100, fontSize: 15, color: '#263238', marginRight: 10 },
+  sendBtn: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  disabledBtn: { backgroundColor: '#CFD8DC', elevation: 0 }
 });
 
 export default ChatScreen;

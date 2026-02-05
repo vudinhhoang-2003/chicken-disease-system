@@ -1,21 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
-  Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform 
+  Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Dimensions, StatusBar 
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 
+const { width } = Dimensions.get('window');
+
 const LoginScreen = ({ navigation }: any) => {
+  const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [secureText, setSecureText] = useState(true);
 
+  const PRIMARY_GREEN = '#2e7d32';
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin');
+      Alert.alert('Thông báo', 'Bà con vui lòng nhập đầy đủ email và mật khẩu nhé!');
       return;
     }
 
@@ -30,197 +35,127 @@ const LoginScreen = ({ navigation }: any) => {
       });
 
       const { access_token } = response.data;
-      await AsyncStorage.setItem('token', access_token);
-      navigation.replace('Home');
+      await login(access_token);
+      // navigation.replace('Home'); // REMOVED: Navigator will auto-switch based on auth state
 
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Đăng nhập thất bại', 'Email hoặc mật khẩu không chính xác.');
+      Alert.alert('Lỗi đăng nhập', 'Email hoặc mật khẩu không đúng. Bà con kiểm tra lại nhé.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.logoContainer}>
-        <Image 
-          source={require('../assets/logo.png')} 
-          style={styles.logoImage} 
-        />
-        <Text style={styles.appName}>ChickHealth</Text>
-        <Text style={styles.tagline}>Trợ lý thú y thông minh</Text>
-      </View>
-
-      <View style={styles.formContainer}>
-        <View style={styles.inputWrapper}>
-          <Icon name="email-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Email đăng nhập"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.inputWrapper}>
-          <Icon name="lock-outline" size={20} color="#666" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Mật khẩu"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={secureText}
-          />
-          <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-             <Icon name={secureText ? "eye-off-outline" : "eye-outline"} size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity 
-          style={styles.loginButton} 
-          onPress={handleLogin} 
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.loginButtonText}>ĐĂNG NHẬP</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.forgotPassword}>
-          <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.registerLink} 
-          onPress={() => navigation.navigate('Register')}
-        >
-          <Text style={styles.registerLinkLabel}>Bạn chưa có tài khoản? <Text style={styles.registerLinkHighlight}>Đăng ký ngay</Text></Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={PRIMARY_GREEN} />
       
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Phiên bản 1.0.0</Text>
+      <View style={[styles.headerBackground, {backgroundColor: PRIMARY_GREEN}]}>
+        <View style={styles.circleDecoration} />
+        <View style={styles.headerContent}>
+          <Image source={require('../assets/logo.png')} style={styles.logo} />
+          <Text style={styles.appName}>ChickHealth</Text>
+          <Text style={styles.tagline}>Chăm sóc đàn gà bằng trí tuệ nhân tạo</Text>
+        </View>
       </View>
-    </KeyboardAvoidingView>
+
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
+      >
+        <View style={styles.formCard}>
+          <Text style={styles.welcomeText}>Đăng nhập hệ thống</Text>
+          <Text style={styles.subText}>Vui lòng điền thông tin tài khoản</Text>
+
+          <View style={styles.inputContainer}>
+            <View style={styles.inputWrapper}>
+              <View style={styles.iconBox}>
+                <Icon name="account-circle-outline" size={22} color={PRIMARY_GREEN} />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Email hoặc Số điện thoại"
+                placeholderTextColor="#90A4AE"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputWrapper}>
+              <View style={styles.iconBox}>
+                <Icon name="lock-outline" size={22} color={PRIMARY_GREEN} />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Mật khẩu"
+                placeholderTextColor="#90A4AE"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={secureText}
+              />
+              <TouchableOpacity onPress={() => setSecureText(!secureText)} style={styles.eyeIcon}>
+                 <Icon name={secureText ? "eye-off-outline" : "eye-outline"} size={22} color="#B0BEC5" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.forgotBtn}>
+            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.loginBtn, {backgroundColor: PRIMARY_GREEN}]} 
+            onPress={handleLogin} 
+            disabled={loading}
+            activeOpacity={0.9}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginBtnText}>ĐĂNG NHẬP NGAY</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.registerRow}>
+            <Text style={styles.regLabel}>Bà con chưa có tài khoản?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={[styles.regHighlight, {color: PRIMARY_GREEN}]}>Đăng ký</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+      
+      <Text style={styles.footerText}>Phiên bản 1.0.0 • Kết nối nông thôn</Text>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  logoContainer: {
-    flex: 0.45,
-    backgroundColor: '#2e7d32', // Web Admin Green
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    paddingBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  logoImage: {
-    width: 120,
-    height: 120,
-    marginBottom: 15,
-    resizeMode: 'contain',
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    letterSpacing: 1,
-  },
-  tagline: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 5,
-  },
-  formContainer: {
-    flex: 0.55,
-    padding: 30,
-    justifyContent: 'center',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    marginBottom: 25,
-    paddingBottom: 8,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 5,
-  },
-  loginButton: {
-    backgroundColor: '#2e7d32', // Web Admin Green
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 10,
-    shadowColor: "#2196F3",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  forgotPassword: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  forgotText: {
-    color: '#7f8c8d',
-    fontSize: 14,
-  },
-  registerLink: {
-    alignItems: 'center',
-    marginTop: 25,
-  },
-  registerLinkLabel: {
-    color: '#7f8c8d',
-    fontSize: 14,
-  },
-  registerLinkHighlight: {
-    color: '#2e7d32',
-    fontWeight: 'bold',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-  },
-  footerText: {
-    color: '#ccc',
-    fontSize: 12,
-  }
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  headerBackground: { height: '42%', borderBottomLeftRadius: 40, borderBottomRightRadius: 40, alignItems: 'center', justifyContent: 'center', paddingBottom: 50, position: 'relative', overflow: 'hidden' },
+  circleDecoration: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.1)' },
+  headerContent: { alignItems: 'center' },
+  logo: { width: 90, height: 90, resizeMode: 'contain', marginBottom: 15 },
+  appName: { fontSize: 32, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  tagline: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 5, fontWeight: '500' },
+  keyboardView: { flex: 1, alignItems: 'center', marginTop: -60 },
+  formCard: { width: width - 40, backgroundColor: '#fff', borderRadius: 28, padding: 30, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 15 },
+  welcomeText: { fontSize: 22, fontWeight: 'bold', color: '#263238', textAlign: 'center', marginBottom: 5 },
+  subText: { fontSize: 14, color: '#90A4AE', textAlign: 'center', marginBottom: 30 },
+  inputContainer: { gap: 18 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', borderRadius: 16, height: 56, paddingHorizontal: 15, borderWidth: 1, borderColor: '#ECEFF1' },
+  iconBox: { width: 30, alignItems: 'center' },
+  input: { flex: 1, fontSize: 16, color: '#37474F', marginLeft: 10 },
+  eyeIcon: { padding: 10 },
+  forgotBtn: { alignSelf: 'flex-end', marginTop: 15, marginBottom: 25 },
+  forgotText: { color: '#78909C', fontWeight: '600', fontSize: 13 },
+  loginBtn: { height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowOpacity: 0.3, shadowOffset: { width: 0, height: 4 } },
+  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
+  registerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 25, gap: 5 },
+  regLabel: { color: '#78909C', fontSize: 14 },
+  regHighlight: { fontWeight: '900', fontSize: 14 },
+  footerText: { textAlign: 'center', color: '#B0BEC5', fontSize: 11, marginBottom: 20 }
 });
 
 export default LoginScreen;

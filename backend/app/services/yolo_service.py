@@ -62,20 +62,10 @@ class YOLOService:
         input_path: str,
         output_path: str,
         conf_threshold: float = 0.5,
-        skip_frames: int = 3  # Process 1 frame every X frames
+        skip_frames: int = 5  # Tăng skip lên 5 (xử lý 1 frame, bỏ 5 frame)
     ) -> Dict:
         """
-        Process video file: Detect sick chickens frame by frame (with skipping).
-        Generates both MP4 video and GIF preview.
-        
-        Args:
-            input_path: Path to input video file
-            output_path: Path to save processed video
-            conf_threshold: Confidence threshold
-            skip_frames: Number of frames to skip (0 = process all)
-            
-        Returns:
-            Dictionary with aggregated stats and gif_path
+        Process video file with optimization: Resize to 640p for speed.
         """
         if self.detection_model is None:
             raise RuntimeError("Detection model not loaded")
@@ -84,15 +74,19 @@ class YOLOService:
         if not cap.isOpened():
             raise RuntimeError("Could not open video file")
 
-        # Get video properties
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        # Get original properties
+        orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
         
-        # Define codec and create VideoWriter
-        # Try 'avc1' (H.264) for better mobile compatibility, fallback to 'mp4v' if needed
+        # Target Resize (Standard YOLO size) -> Speed up 3x-4x
+        target_w = 640
+        scale = target_w / orig_width
+        target_h = int(orig_height * scale)
+        
+        # Define codec
         fourcc = cv2.VideoWriter_fourcc(*'avc1') 
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (target_w, target_h))
         
         frame_count = 0
         max_sick = 0
@@ -100,26 +94,27 @@ class YOLOService:
         total_sick_accum = 0
         processed_frames_count = 0
         
-        last_results = None # To cache results for skipped frames
-        gif_frames = [] # Store frames for GIF
+        last_annotated_frame = None 
+        gif_frames = [] 
         
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
             
-            # Process frame if it matches skip pattern OR if it's the first frame
+            # Resize frame immediately
+            frame_resized = cv2.resize(frame, (target_w, target_h))
+            
+            # Process frame logic
             if frame_count % (skip_frames + 1) == 0:
-                results = self.detection_model(frame, conf=conf_threshold, verbose=False)
-                last_results = results
+                results = self.detection_model(frame_resized, conf=conf_threshold, verbose=False)
                 processed_frames_count += 1
                 
-                # Count stats for this frame
+                # Count stats
                 current_sick = 0
                 current_total = 0
                 
-                # Draw boxes on frame
-                annotated_frame = frame.copy()
+                annotated_frame = frame_resized.copy()
                 for box in results[0].boxes:
                     current_total += 1
                     class_id = int(box.cls)
@@ -129,44 +124,32 @@ class YOLOService:
                     if not is_healthy:
                         current_sick += 1
                     
-                    # Draw
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     color = (0, 255, 0) if is_healthy else (0, 0, 255)
                     cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
                     label = f"{class_name} {box.conf[0]:.2f}"
                     cv2.putText(annotated_frame, label, (x1, y1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 
-                # Update aggregated stats
                 max_sick = max(max_sick, current_sick)
                 max_total = max(max_total, current_total)
                 total_sick_accum += current_sick
                 
-                # Save frame for GIF (Resize to width 480 to keep size small)
-                rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                h, w = rgb_frame.shape[:2]
-                new_w = 480
-                new_h = int(h * (new_w / w))
-                resized_frame = cv2.resize(rgb_frame, (new_w, new_h))
-                gif_frames.append(resized_frame)
+                last_annotated_frame = annotated_frame
+                
+                # Collect frames for GIF (Sampling)
+                if len(gif_frames) < 60: # Limit GIF size
+                    rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                    # Resize smaller for GIF
+                    gif_h, gif_w = rgb_frame.shape[:2]
+                    gif_scale = 320 / gif_w
+                    gif_frame = cv2.resize(rgb_frame, (320, int(gif_h * gif_scale)))
+                    gif_frames.append(gif_frame)
                 
             else:
-                # For skipped frames, just use the last annotated frame (or draw last boxes)
-                annotated_frame = frame.copy()
-                if last_results:
-                    for box in last_results[0].boxes:
-                        class_id = int(box.cls)
-                        class_name = last_results[0].names[class_id]
-                        is_healthy = "healthy" in class_name.lower()
-                        
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        color = (0, 255, 0) if is_healthy else (0, 0, 255)
-                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-                        label = f"{class_name} {box.conf[0]:.2f}"
-                        cv2.putText(annotated_frame, label, (x1, y1 - 10), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                # Use last known frame for skipped ones to keep video smooth
+                annotated_frame = last_annotated_frame if last_annotated_frame is not None else frame_resized
 
-            # Write frame to video
             out.write(annotated_frame)
             frame_count += 1
 
@@ -175,8 +158,8 @@ class YOLOService:
         
         # Save GIF
         gif_path = output_path.replace('.mp4', '.gif')
-        # Save GIF with 10fps (since we skipped frames, the visual speed might be fast, but acceptable for preview)
-        imageio.mimsave(gif_path, gif_frames, fps=10, loop=0)
+        if gif_frames:
+            imageio.mimsave(gif_path, gif_frames, fps=8, loop=0)
         
         return {
             "total_frames": frame_count,
