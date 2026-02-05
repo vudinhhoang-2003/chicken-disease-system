@@ -1,18 +1,59 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, Image, 
-  ScrollView, Dimensions, StatusBar, SafeAreaView 
+  ScrollView, Dimensions, StatusBar, SafeAreaView, ActivityIndicator, Platform 
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthContext } from '../context/AuthContext';
+import { getWeatherAdvice, WeatherAdvice } from '../utils/weatherRules';
+import axios from 'axios';
 
 const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }: any) => {
   const { user, logout } = useContext(AuthContext);
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [weatherAdvice, setWeatherAdvice] = useState<WeatherAdvice | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   const PRIMARY_GREEN = '#2e7d32';
   const DARK_GREEN = '#1B5E20';
+
+  useEffect(() => {
+    fetchWeather();
+  }, []);
+
+  const fetchWeather = async () => {
+    try {
+      setWeatherLoading(true);
+      // Gọi API với timeout 5s để tránh treo loading
+      const response = await axios.get(
+        `https://api.openweathermap.org/data/2.5/weather?q=Hanoi&units=metric&appid=c549f48ca1d3e62445770acaa7a8aed9&lang=vi`,
+        { timeout: 5000 }
+      );
+      
+      if (response.data && response.data.main) {
+        const { temp, humidity } = response.data.main;
+        const condition = response.data.weather[0]?.main;
+        setWeatherData(response.data);
+        setWeatherAdvice(getWeatherAdvice(temp, humidity, condition));
+      } else {
+        throw new Error("Dữ liệu không hợp lệ");
+      }
+    } catch (error: any) {
+      console.log("Weather API Fetch Error:", error.message);
+      // KHÔNG dùng số ảo nữa, để người dùng biết là đang lỗi
+      setWeatherData(null);
+      setWeatherAdvice({
+        status: "CHƯA CẬP NHẬT",
+        advice: "Không lấy được dữ liệu thời tiết. Bà con vui lòng kiểm tra kết nối mạng hoặc thử lại sau.",
+        color: "#78909C",
+        icon: "cloud-off-outline"
+      });
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
 
   const menuItems = [
     {
@@ -73,21 +114,47 @@ const HomeScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
         
-        {/* Farm Status Card */}
+        {/* Farm Status Card - DYNAMIC WEATHER ALERT */}
         <View style={styles.statusCard}>
-          <View style={styles.statusInfo}>
-            <View style={styles.iconCircle}>
-              <Icon name="home-modern" size={28} color={PRIMARY_GREEN} />
+          {weatherLoading ? (
+            <View style={{flex: 1, height: 60, justifyContent: 'center'}}>
+              <ActivityIndicator color={PRIMARY_GREEN} />
             </View>
-            <View style={{marginLeft: 12}}>
-              <Text style={styles.statusTitle}>Sức khỏe đàn gà</Text>
-              <Text style={styles.statusSub}>Đàn gà đang phát triển tốt</Text>
-            </View>
-          </View>
-          <View style={styles.badge}>
-            <View style={styles.dot} />
-            <Text style={styles.badgeText}>KHỎE MẠNH</Text>
-          </View>
+          ) : (
+            <>
+              <View style={styles.statusInfo}>
+                <View style={[styles.iconCircle, { backgroundColor: weatherAdvice?.color + '20' }]}>
+                  <Icon name={weatherAdvice?.icon || 'home-modern'} size={28} color={weatherAdvice?.color || PRIMARY_GREEN} />
+                </View>
+                <View style={{marginLeft: 12, flex: 1}}>
+                  <View style={{flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 4}}>
+                    <Text style={styles.statusTitle}>{weatherAdvice?.status}</Text>
+                    {weatherData && (
+                      <View style={styles.tempBadge}>
+                        <Text style={styles.tempText}>{Math.round(weatherData.main.temp)}°C</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    <Icon name="water-percent" size={14} color="#546E7A" />
+                    <Text style={styles.weatherDetail}>
+                       {weatherData ? `${weatherData.main.humidity}% ẩm • ${weatherData.weather[0]?.description}` : '-- % ẩm'}
+                    </Text>
+                  </View>
+                  <Text style={styles.statusSub} numberOfLines={2}>
+                    {weatherAdvice?.advice}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={fetchWeather} style={{alignItems: 'flex-end'}}>
+                 <View style={styles.cityBadge}>
+                    <Icon name="map-marker" size={10} color="#90A4AE" />
+                    <Text style={styles.cityName}>{weatherData?.name || 'Hà Nội'}</Text>
+                 </View>
+                 <Icon name="refresh" size={18} color="#B0BEC5" style={{marginTop: 8}} />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -146,10 +213,28 @@ const styles = StyleSheet.create({
     borderRadius: 20, padding: 16, justifyContent: 'space-between', alignItems: 'center',
     elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10
   },
-  statusInfo: { flexDirection: 'row', alignItems: 'center' },
+  statusInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconCircle: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
-  statusTitle: { color: '#263238', fontSize: 15, fontWeight: 'bold' },
-  statusSub: { color: '#90A4AE', fontSize: 12, marginTop: 2 },
+  statusTitle: { color: '#263238', fontSize: 14, fontWeight: 'bold' },
+  tempBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  tempText: { color: '#2e7d32', fontSize: 12, fontWeight: 'bold' },
+  cityBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F5F7F9', 
+    paddingHorizontal: 6, 
+    paddingVertical: 2, 
+    borderRadius: 6,
+  },
+  cityName: { color: '#90A4AE', fontSize: 10, fontWeight: 'bold', marginLeft: 2 },
+  weatherDetail: { color: '#546E7A', fontSize: 12, marginLeft: 4, fontWeight: '700' },
+  statusSub: { color: '#78909C', fontSize: 12, marginTop: 4, lineHeight: 16 },
   badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2e7d32', marginRight: 6 },
   badgeText: { color: '#2e7d32', fontSize: 10, fontWeight: '900' },
