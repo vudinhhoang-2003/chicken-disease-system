@@ -126,8 +126,8 @@ const ChatScreen = ({ route }: any) => {
       <CustomHeader title="Trợ lý AI" subtitle="Tư vấn chăn nuôi 24/7" />
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 25}
       >
         <FlatList
           ref={flatListRef}
@@ -136,6 +136,7 @@ const ChatScreen = ({ route }: any) => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
         />
 
         {loading && (

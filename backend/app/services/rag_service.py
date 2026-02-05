@@ -184,10 +184,13 @@ class RAGService:
             return {"answer": "Hệ thống AI chưa sẵn sàng.", "usage": None}
         try:
             query_vector = self.embeddings.embed_query(question)
-            results = self.collection.query(query_embeddings=[query_vector], n_results=3)
+            # Giảm n_results xuống 2 để tiết kiệm token
+            results = self.collection.query(query_embeddings=[query_vector], n_results=2)
             context = ""
             if results['documents'] and results['documents'][0]:
-                context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(results['documents'][0])
+                # Giới hạn độ dài mỗi tài liệu để tránh tràn token (khoảng 2000 ký tự mỗi doc)
+                truncated_docs = [doc[:2000] + "..." if len(doc) > 2000 else doc for doc in results['documents'][0]]
+                context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(truncated_docs)
             
             if not self.llm:
                 return {
