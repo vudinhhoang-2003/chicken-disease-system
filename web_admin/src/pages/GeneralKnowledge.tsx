@@ -192,41 +192,56 @@ const GeneralKnowledge = () => {
         </Table>
       </TableContainer>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle>{editId ? 'Cập nhật kiến thức' : 'Thêm kiến thức mới'}</DialogTitle>
         <DialogContent>
-          <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-            <Autocomplete
-              freeSolo
-              options={getCategoryOptions()}
-              value={formData.category}
-              onChange={(_, newValue) => {
-                setFormData({ ...formData, category: newValue || '' });
-              }}
-              onInputChange={(_, newInputValue) => {
-                setFormData({ ...formData, category: newInputValue });
-              }}
-              renderInput={(params) => (
-                <TextField {...params} label="Danh mục (Chọn hoặc gõ mới)" required fullWidth />
-              )}
-            />
+          <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+            <Box display="flex" gap={2}>
+              <Autocomplete
+                freeSolo
+                sx={{ flex: 1 }}
+                options={getCategoryOptions()}
+                value={formData.category}
+                onChange={(_, newValue) => {
+                  setFormData({ ...formData, category: newValue || '' });
+                }}
+                onInputChange={(_, newInputValue) => {
+                  setFormData({ ...formData, category: newInputValue });
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Danh mục" required fullWidth />
+                )}
+              />
+              <TextField
+                label="Nguồn tham khảo"
+                sx={{ flex: 1 }}
+                value={formData.source}
+                placeholder="VD: Giáo trình, Website..."
+                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+              />
+            </Box>
+            
             <TextField
-              label="Tiêu đề"
+              label="Tiêu đề bài viết"
               fullWidth required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             />
+            
             <TextField
               label="Nội dung chi tiết"
-              fullWidth multiline rows={6} required
+              placeholder="Nhập nội dung kiến thức chăn nuôi vào đây..."
+              fullWidth multiline 
+              minRows={12} 
+              required
               value={formData.content}
               onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-            />
-            <TextField
-              label="Nguồn tham khảo"
-              fullWidth
-              value={formData.source}
-              onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+              sx={{
+                '& .MuiInputBase-root': {
+                  fontFamily: 'Roboto, sans-serif',
+                  lineHeight: 1.6
+                }
+              }}
             />
           </Box>
         </DialogContent>
