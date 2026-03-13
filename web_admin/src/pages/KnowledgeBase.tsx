@@ -331,27 +331,30 @@ const KnowledgeBase = () => {
               label="Triệu chứng" 
               fullWidth 
               multiline 
-              rows={3} 
+              minRows={4}
               required 
               value={formData.symptoms}
               onChange={(e) => setFormData({...formData, symptoms: e.target.value})}
+              helperText="Mô tả chi tiết các dấu hiệu bên ngoài, phân, thái độ của gà..."
             />
             <TextField 
               label="Nguyên nhân" 
               fullWidth 
               multiline 
-              rows={2} 
+              minRows={3}
               required 
               value={formData.cause}
               onChange={(e) => setFormData({...formData, cause: e.target.value})}
+              helperText="Do vi khuẩn, virus, môi trường hay dinh dưỡng?"
             />
              <TextField 
               label="Cách phòng ngừa" 
               fullWidth 
               multiline 
-              rows={2} 
+              minRows={3}
               value={formData.prevention}
               onChange={(e) => setFormData({...formData, prevention: e.target.value})}
+              helperText="Các biện pháp an toàn sinh học, vaccine, vệ sinh chuồng trại..."
             />
             <TextField 
               label="Nguồn tài liệu tham khảo" 

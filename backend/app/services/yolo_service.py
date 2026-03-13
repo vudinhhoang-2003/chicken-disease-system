@@ -61,8 +61,8 @@ class YOLOService:
         self,
         input_path: str,
         output_path: str,
-        conf_threshold: float = 0.5,
-        skip_frames: int = 5  # Tăng skip lên 5 (xử lý 1 frame, bỏ 5 frame)
+        conf_threshold: float = 0.3,
+        skip_frames: int = 3  # Giảm skip frames để nhận diện mượt hơn
     ) -> Dict:
         """
         Process video file with optimization: Resize to 640p for speed.
@@ -107,7 +107,8 @@ class YOLOService:
             
             # Process frame logic
             if frame_count % (skip_frames + 1) == 0:
-                results = self.detection_model(frame_resized, conf=conf_threshold, verbose=False)
+                # Thêm iou=0.45 để xử lý chồng lấn gà tốt hơn trong video
+                results = self.detection_model(frame_resized, conf=conf_threshold, iou=0.45, verbose=False)
                 processed_frames_count += 1
                 
                 # Count stats
@@ -175,14 +176,14 @@ class YOLOService:
     async def detect_sick_chickens(
         self, 
         image: np.ndarray, 
-        conf_threshold: float = 0.6
+        conf_threshold: float = 0.3
     ) -> Dict:
         """
         STEP 1: Detect healthy/sick chickens in image
         
         Args:
             image: Input image as numpy array (BGR format)
-            conf_threshold: Confidence threshold for detection (default: 0.6)
+            conf_threshold: Confidence threshold for detection (default: 0.3)
         
         Returns:
             Dictionary containing:
@@ -198,8 +199,8 @@ class YOLOService:
             raise RuntimeError("Detection model not loaded")
         
         try:
-            # Run inference
-            results = self.detection_model(image, conf=conf_threshold, verbose=False)
+            # Run inference with iou=0.45 to handle crowded scenes better
+            results = self.detection_model(image, conf=conf_threshold, iou=0.45, verbose=False)
             
             detections = []
             healthy_count = 0
@@ -225,13 +226,13 @@ class YOLOService:
                 else:
                     sick_count += 1
 
-                # Draw Box
-                cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 3)
+                # Draw Box - use thickness 2 for clearer view when many boxes exist
+                cv2.rectangle(annotated_image, (x1, y1), (x2, y2), color, 2)
                 
-                # Draw Label
+                # Draw Label - smaller scale 0.5 for crowded scenes
                 label = f"{class_name} {confidence:.2f}"
                 cv2.putText(annotated_image, label, (x1, y1 - 10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
                 detection = {
                     "id": idx + 1,

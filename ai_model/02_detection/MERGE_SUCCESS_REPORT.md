@@ -9,9 +9,9 @@
 ## 📊 THỐNG KÊ MERGED DATASET
 
 ### **Số lượng ảnh:**
-- **Train:** 2,781 ảnh (339 gốc + 2,442 Roboflow)
-- **Valid:** 277 ảnh (43 gốc + 234 Roboflow)
-- **Test:** 117 ảnh (từ Roboflow)
+- **Train:** 2,781 ảnh (339  + 2,442 )
+- **Valid:** 277 ảnh (43 gốc + 234 )
+- **Test:** 117 ảnh 
 - **TOTAL:** **3,175 ảnh** 🚀
 
 ### **Tăng gấp 8.3x so với ban đầu!**

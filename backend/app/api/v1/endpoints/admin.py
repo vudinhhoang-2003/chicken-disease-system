@@ -404,8 +404,9 @@ async def update_disease(
     disease.source = disease_in.source
     
     # 2. Cập nhật phác đồ: Xóa hết cũ, thêm mới (Logic đơn giản và hiệu quả nhất cho MVP)
-    # Xóa các steps cũ (Medicines sẽ tự xóa theo nhờ cascade delete-orphan)
-    db.query(TreatmentStep).filter(TreatmentStep.disease_id == disease.id).delete()
+    # Xóa các steps cũ thông qua ORM để trigger cascade delete-orphan cho Medicines
+    disease.treatment_steps = []
+    db.flush() # Đảm bảo đã xóa sạch trước khi thêm mới
     
     # Thêm các steps mới
     for step_in in disease_in.treatment_steps:

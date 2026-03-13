@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
-import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, 
-  Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Dimensions, StatusBar 
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Dimensions, StatusBar
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthContext } from '../context/AuthContext';
@@ -49,17 +49,17 @@ const LoginScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={PRIMARY_GREEN} />
-      
-      <View style={[styles.headerBackground, {backgroundColor: PRIMARY_GREEN}]}>
+
+      <View style={[styles.headerBackground, { backgroundColor: PRIMARY_GREEN }]}>
         <View style={styles.circleDecoration} />
         <View style={styles.headerContent}>
           <Image source={require('../assets/logo.png')} style={styles.logo} />
           <Text style={styles.appName}>ChickHealth</Text>
-          <Text style={styles.tagline}>Chăm sóc đàn gà bằng trí tuệ nhân tạo</Text>
+          <Text style={styles.tagline}>Chăm sóc đàn gà của bạn</Text>
         </View>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
       >
@@ -95,7 +95,7 @@ const LoginScreen = ({ navigation }: any) => {
                 secureTextEntry={secureText}
               />
               <TouchableOpacity onPress={() => setSecureText(!secureText)} style={styles.eyeIcon}>
-                 <Icon name={secureText ? "eye-off-outline" : "eye-outline"} size={22} color="#B0BEC5" />
+                <Icon name={secureText ? "eye-off-outline" : "eye-outline"} size={22} color="#B0BEC5" />
               </TouchableOpacity>
             </View>
           </View>
@@ -104,9 +104,9 @@ const LoginScreen = ({ navigation }: any) => {
             <Text style={styles.forgotText}>Quên mật khẩu?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.loginBtn, {backgroundColor: PRIMARY_GREEN}]} 
-            onPress={handleLogin} 
+          <TouchableOpacity
+            style={[styles.loginBtn, { backgroundColor: PRIMARY_GREEN }]}
+            onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.9}
           >
@@ -118,14 +118,14 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
 
           <View style={styles.registerRow}>
-            <Text style={styles.regLabel}>Bà con chưa có tài khoản?</Text>
+            <Text style={styles.regLabel}>Bạn chưa có tài khoản?</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={[styles.regHighlight, {color: PRIMARY_GREEN}]}>Đăng ký</Text>
+              <Text style={[styles.regHighlight, { color: PRIMARY_GREEN }]}>Đăng ký</Text>
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
-      
+
       <Text style={styles.footerText}>Phiên bản 1.0.0 • Kết nối nông thôn</Text>
     </View>
   );
