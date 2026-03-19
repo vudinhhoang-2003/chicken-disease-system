@@ -8,8 +8,8 @@ from pathlib import Path
 import torch
 import imageio
 
-# Fix for PyTorch 2.6+ weights_only loading issue with Ultralytics
-# Monkeypatch torch.load to default to weights_only=False
+# Thủ thuật (Monkeypatch) để qua mặt hàng rào cảnh báo bảo mật mới nhất của PyTorch 2.6+.
+# Bắt buộc phải viết đè hàm torch.load này để thư viện Ultralytics YOLO cho phép nạp lại tệp weights an toàn.
 original_torch_load = torch.load
 def patched_torch_load(*args, **kwargs):
     if 'weights_only' not in kwargs:
@@ -62,10 +62,13 @@ class YOLOService:
         input_path: str,
         output_path: str,
         conf_threshold: float = 0.3,
-        skip_frames: int = 3  # Giảm skip frames để nhận diện mượt hơn
+        skip_frames: int = 3  # Số lượng khung hình sẽ ngủ/bỏ qua (để tối ưu CPU không phải chạy AI liên tục)
     ) -> Dict:
         """
-        Process video file with optimization: Resize to 640p for speed.
+        Xử lý stream Video được gửi lên:
+        - Tối ưu 1: Ép độ phân giải về tiêu chuẩn 640p chiều rộng giúp quét vật thể tăng tốc 3-4 lần.
+        - Tối ưu 2: Trích xuất frame bệnh xen kẽ để rèn thành ảnh GIF báo cáo nhanh nhẹ cho App Mobile,
+          tránh user phải tải lại video MP4 nặng.
         """
         if self.detection_model is None:
             raise RuntimeError("Detection model not loaded")
@@ -179,11 +182,11 @@ class YOLOService:
         conf_threshold: float = 0.3
     ) -> Dict:
         """
-        STEP 1: Detect healthy/sick chickens in image
+        BƯỚC 1: Dò tìm và khoanh vùng (Detection) gà khỏe/bệnh trên tấm ảnh tĩnh.
         
         Args:
-            image: Input image as numpy array (BGR format)
-            conf_threshold: Confidence threshold for detection (default: 0.3)
+            image: Mảng numpy BGR (frame trích xuất).
+            conf_threshold: Ngưỡng chấp nhận độ tự tin (tin cậy > 30% mới tính).
         
         Returns:
             Dictionary containing:
@@ -308,12 +311,17 @@ class YOLOService:
             raise
 
 
-# Global instance
+# Khai báo một thể hiện (Instance) duy nhất (Singleton Pattern) của bộ AI Computer Vision
 _yolo_service: Optional[YOLOService] = None
 
 
 def get_yolo_service() -> YOLOService:
-    """Get or create YOLO service singleton"""
+    """
+    Kích hoạt áp dụng Design Pattern: Singleton.
+    Đảm bảo việc tải 2 file trọng số model khổng lồ (.pt) vào RAM chỉ diễn ra duy nhất 1 lần 
+    khi server khởi động lên. Chặn đứng lỗi "Out of Memory" (Ngốn RAM) khi nhiều nông dân 
+    cùng truy cập API tải ảnh lên 1 lúc (bất kể ai truy cập cũng chỉ dùng chung qua phiễu Object này).
+    """
     global _yolo_service
     if _yolo_service is None:
         _yolo_service = YOLOService()

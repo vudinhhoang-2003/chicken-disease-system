@@ -12,6 +12,8 @@ from app.core import models
 from app.core.database import SessionLocal
 from app.services.usage_service import usage_service
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
@@ -54,6 +56,13 @@ class RAGService:
             logger.error(f"❌ Failed to connect to ChromaDB: {e}")
             self.chroma_client = None
 
+        # 4. Initialize Text Splitter
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=700,
+            chunk_overlap=150,
+            separators=["\n\n", "\n", ".", "!", "?", " ", ""]
+        )
+
     def _initialize_llm(self):
         """Initialize LLM with dynamic settings from Database"""
         db = SessionLocal()
@@ -91,8 +100,6 @@ class RAGService:
 
     def _format_disease_text(self, disease: models.Disease) -> str:
         text = f"BỆNH: {disease.name_vi} ({disease.name_en})\n"
-        if disease.source:
-            text += f"NGUỒN TÀI LIỆU: {disease.source}\n"
         text += f"MÃ BỆNH: {disease.code}\n\n"
         text += f"TRIỆU CHỨNG:\n{disease.symptoms}\n\n"
         text += f"NGUYÊN NHÂN:\n{disease.cause}\n\n"
@@ -122,14 +129,31 @@ class RAGService:
             ).filter(models.Disease.id == disease_id).first()
 
             text_content = self._format_disease_text(disease_full)
-            vector = self.embeddings.embed_query(text_content)
-            vector_id = f"dis_{disease.id}"
+            chunks = self.text_splitter.split_text(text_content)
+            
+            ids = []
+            documents = []
+            metadatas = []
+            
+            for i, chunk in enumerate(chunks):
+                ids.append(f"dis_{disease.id}_chunk_{i}")
+                documents.append(chunk)
+                metadatas.append({
+                    "id": disease.id, 
+                    "type": "disease", 
+                    "code": disease.code, 
+                    "name": disease.name_vi,
+                    "source": disease.source if disease.source else "Chưa phân loại",
+                    "chunk_index": i
+                })
+                
+            embeddings = self.embeddings.embed_documents(documents)
             
             self.collection.upsert(
-                ids=[vector_id],
-                embeddings=[vector],
-                documents=[text_content],
-                metadatas=[{"id": disease.id, "type": "disease", "code": disease.code, "name": disease.name_vi}]
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas
             )
             disease.sync_status = "SUCCESS"; disease.sync_error = None
             db.commit()
@@ -142,13 +166,12 @@ class RAGService:
     def delete_disease_vector(self, disease_id: int):
         if self.collection:
             try:
-                self.collection.delete(ids=[f"dis_{disease_id}"])
-                self.collection.delete(ids=[str(disease_id)])
-            except: pass
+                self.collection.delete(where={"$and": [{"id": disease_id}, {"type": "disease"}]})
+            except Exception as e: 
+                logger.error(f"❌ Error deleting disease vectors: {e}")
 
     def _format_general_knowledge_text(self, knowledge: models.GeneralKnowledge) -> str:
         text = f"KIẾN THỨC CHĂN NUÔI: {knowledge.category}\nCHỦ ĐỀ: {knowledge.title}\n"
-        if knowledge.source: text += f"NGUỒN: {knowledge.source}\n"
         text += f"NỘI DUNG:\n{knowledge.content}"
         return text
 
@@ -159,12 +182,30 @@ class RAGService:
             knowledge = db.query(models.GeneralKnowledge).filter(models.GeneralKnowledge.id == knowledge_id).first()
             if not knowledge or not self.chroma_client or not self.embeddings: return
             text_content = self._format_general_knowledge_text(knowledge)
-            vector = self.embeddings.embed_query(text_content)
+            chunks = self.text_splitter.split_text(text_content)
+            
+            ids = []
+            documents = []
+            metadatas = []
+            
+            for i, chunk in enumerate(chunks):
+                ids.append(f"gen_{knowledge.id}_chunk_{i}")
+                documents.append(chunk)
+                metadatas.append({
+                    "id": knowledge.id, 
+                    "type": "general", 
+                    "title": knowledge.title,
+                    "source": knowledge.source if knowledge.source else "Chưa phân loại",
+                    "chunk_index": i
+                })
+                
+            embeddings = self.embeddings.embed_documents(documents)
+            
             self.collection.upsert(
-                ids=[f"gen_{knowledge.id}"],
-                embeddings=[vector],
-                documents=[text_content],
-                metadatas=[{"id": knowledge.id, "type": "general", "title": knowledge.title}]
+                ids=ids,
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas
             )
             knowledge.sync_status = "SUCCESS"; knowledge.sync_error = None
             db.commit()
@@ -176,21 +217,29 @@ class RAGService:
 
     def delete_general_knowledge_vector(self, knowledge_id: int):
         if self.collection:
-            try: self.collection.delete(ids=[f"gen_{knowledge_id}"])
-            except: pass
+            try: 
+                self.collection.delete(where={"$and": [{"id": knowledge_id}, {"type": "general"}]})
+            except Exception as e: 
+                logger.error(f"❌ Error deleting general knowledge vectors: {e}")
 
     async def answer_question(self, question: str, history: List[Dict] = []) -> Dict:
         if not self.chroma_client or not self.embeddings: 
             return {"answer": "Hệ thống AI chưa sẵn sàng.", "usage": None}
         try:
             query_vector = self.embeddings.embed_query(question)
-            # Giảm n_results xuống 2 để tiết kiệm token
-            results = self.collection.query(query_embeddings=[query_vector], n_results=2)
+            # Tăng n_results lên 5 vì chunk_size đã thu nhỏ lại khoảng 700 ký tự (~256 tokens)
+            results = self.collection.query(query_embeddings=[query_vector], n_results=5)
             context = ""
             if results['documents'] and results['documents'][0]:
-                # Giới hạn độ dài mỗi tài liệu để tránh tràn token (khoảng 2000 ký tự mỗi doc)
-                truncated_docs = [doc[:2000] + "..." if len(doc) > 2000 else doc for doc in results['documents'][0]]
-                context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(truncated_docs)
+                # Sử dụng trực tiếp chunk thay vì substring cắt dở dang
+                # Lấy kèm Metadata Source đính lên đầu (Header) của từng Chunk
+                formatted_chunks = []
+                for idx, doc in enumerate(results['documents'][0]):
+                    meta = results['metadatas'][0][idx] if results['metadatas'] else {}
+                    source_text = meta.get('source', 'Chưa phân loại')
+                    formatted_chunks.append(f"[Nguồn tham khảo: {source_text}]\n{doc}")
+                
+                context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(formatted_chunks)
             
             if not self.llm:
                 return {

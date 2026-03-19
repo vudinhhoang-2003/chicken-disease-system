@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, Text, StyleSheet, Pressable, Image, 
+import {
+  View, Text, StyleSheet, Pressable, Image,
   ScrollView, ActivityIndicator, Alert, Dimensions, Animated, Easing, StatusBar, Platform, TouchableOpacity
 } from 'react-native';
 import { launchCamera, launchImageLibrary, MediaType } from 'react-native-image-picker';
@@ -19,7 +19,7 @@ const ClassifyScreen = ({ navigation }: any) => {
 
   const PRIMARY_GREEN = '#2e7d32';
   const DARK_GREEN = '#1B5E20';
-  
+
   // Animations
   const scanAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -74,17 +74,17 @@ const ClassifyScreen = ({ navigation }: any) => {
   const handleAnalyze = async () => {
     if (!imageFile) return;
     setLoading(true);
-    
+
     try {
       const formData = new FormData();
       formData.append('file', { uri: imageFile.uri, type: imageFile.type, name: imageFile.name });
       const response = await client.post('/detect/classify', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      
+
       setTimeout(() => {
         setResult(response.data);
         setLoading(false);
-      }, 1000); 
-      
+      }, 1000);
+
     } catch (error: any) {
       Alert.alert('Lỗi chẩn đoán', 'Không thể kết nối với máy chủ AI.');
       setLoading(false);
@@ -101,8 +101,8 @@ const ClassifyScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      <CustomHeader 
-        title="Chẩn Đoán Bệnh" 
+      <CustomHeader
+        title="Chẩn Đoán Bệnh"
         subtitle="Chẩn đoán mẫu phân bằng AI"
         rightComponent={
           <View style={styles.headerIcon}>
@@ -112,7 +112,7 @@ const ClassifyScreen = ({ navigation }: any) => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-        
+
         <View style={styles.scannerWrapper}>
           <View style={[styles.scanFrame, result && { borderColor: statusColor, borderWidth: 2 }]}>
             {imageUri ? (
@@ -145,11 +145,11 @@ const ClassifyScreen = ({ navigation }: any) => {
             <View style={styles.controls}>
               {imageUri ? (
                 <View style={styles.actionRow}>
-                  <Pressable style={styles.btnSub} onPress={() => {setImageUri(null); setImageFile(null);}}>
+                  <Pressable style={styles.btnSub} onPress={() => { setImageUri(null); setImageFile(null); }}>
                     <Icon name="close" size={24} color="#546E7A" />
                   </Pressable>
-                  <Pressable 
-                    style={({pressed}) => [styles.btnMain, pressed && {transform: [{scale: 0.96}]}]} 
+                  <Pressable
+                    style={({ pressed }) => [styles.btnMain, pressed && { transform: [{ scale: 0.96 }] }]}
                     onPress={handleAnalyze}
                   >
                     <Icon name="check-decagram" size={24} color="#fff" />
@@ -159,13 +159,13 @@ const ClassifyScreen = ({ navigation }: any) => {
               ) : (
                 <View style={styles.pickers}>
                   <Pressable style={styles.pickerBtn} onPress={() => handleSelectImage('library')}>
-                    <View style={[styles.pickerIcon, {backgroundColor: '#E8F5E9'}]}>
+                    <View style={[styles.pickerIcon, { backgroundColor: '#E8F5E9' }]}>
                       <Icon name="image-outline" size={28} color={PRIMARY_GREEN} />
                     </View>
                     <Text style={styles.pickerLabel}>Thư viện</Text>
                   </Pressable>
                   <Pressable style={styles.pickerBtn} onPress={() => handleSelectImage('camera')}>
-                    <View style={[styles.pickerIcon, {backgroundColor: '#E8F5E9'}]}>
+                    <View style={[styles.pickerIcon, { backgroundColor: '#E8F5E9' }]}>
                       <Icon name="camera-iris" size={32} color={PRIMARY_GREEN} />
                     </View>
                     <Text style={styles.pickerLabel}>Chụp mẫu</Text>
@@ -181,12 +181,12 @@ const ClassifyScreen = ({ navigation }: any) => {
             <View style={styles.diagnosisCard}>
               <Text style={styles.cardHeader}>KẾT QUẢ CHẨN ĐOÁN</Text>
               <View style={styles.diagnosisRow}>
-                <View style={{flex: 1}}>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.diseaseName}>{result.disease_detail?.name_vi || result.disease}</Text>
                   <Text style={styles.diseaseEng}>{result.disease_detail?.name_en || ""}</Text>
                 </View>
                 <View style={styles.confidenceCircle}>
-                  <Text style={[styles.confValue, {color: statusColor}]}>{(result.confidence * 100).toFixed(0)}%</Text>
+                  <Text style={[styles.confValue, { color: statusColor }]}>{(result.confidence * 100).toFixed(0)}%</Text>
                   <Text style={styles.confLabel}>Chính xác</Text>
                 </View>
               </View>
@@ -194,16 +194,26 @@ const ClassifyScreen = ({ navigation }: any) => {
 
             {!isHealthy && result.disease_detail && (
               <>
+                {result.disease_detail.cause && (
+                  <View style={styles.infoGroup}>
+                    <View style={styles.infoHeader}>
+                      <Icon name="bacteria-outline" size={20} color="#E53935" />
+                      <Text style={[styles.infoTitle, { color: DARK_GREEN }]}>NGUYÊN NHÂN GÂY BỆNH</Text>
+                    </View>
+                    <Text style={styles.infoBody}>{result.disease_detail.cause}</Text>
+                  </View>
+                )}
+
                 <View style={styles.infoGroup}>
                   <View style={styles.infoHeader}>
                     <Icon name="alert-circle-outline" size={20} color="#FF7043" />
-                    <Text style={[styles.infoTitle, {color: DARK_GREEN}]}>TRIỆU CHỨNG NHẬN DIỆN</Text>
+                    <Text style={[styles.infoTitle, { color: DARK_GREEN }]}>TRIỆU CHỨNG NHẬN DIỆN</Text>
                   </View>
                   <Text style={styles.infoBody}>{result.disease_detail.symptoms}</Text>
                 </View>
 
                 <View style={styles.treatmentCard}>
-                  <View style={[styles.treatmentHeader, {backgroundColor: PRIMARY_GREEN}]}>
+                  <View style={[styles.treatmentHeader, { backgroundColor: PRIMARY_GREEN }]}>
                     <Icon name="medical-bag" size={22} color="#fff" />
                     <Text style={styles.treatmentTitle}>PHÁC ĐỒ ĐIỀU TRỊ</Text>
                   </View>
@@ -211,7 +221,7 @@ const ClassifyScreen = ({ navigation }: any) => {
                     {result.disease_detail.treatment_steps?.map((step: any, index: number) => (
                       <View key={step.id} style={styles.stepItem}>
                         <View style={styles.stepLeft}>
-                          <View style={[styles.stepCircle, {backgroundColor: PRIMARY_GREEN}]}>
+                          <View style={[styles.stepCircle, { backgroundColor: PRIMARY_GREEN }]}>
                             <Text style={styles.stepNum}>{step.step_order}</Text>
                           </View>
                           {index < result.disease_detail.treatment_steps.length - 1 && <View style={styles.stepLine} />}
@@ -222,7 +232,7 @@ const ClassifyScreen = ({ navigation }: any) => {
                             {step.medicines?.map((med: any) => (
                               <View key={med.id} style={styles.pill}>
                                 <Icon name="pill" size={14} color={PRIMARY_GREEN} />
-                                <Text style={[styles.pillText, {color: PRIMARY_GREEN}]}>{med.name} • {med.dosage}</Text>
+                                <Text style={[styles.pillText, { color: PRIMARY_GREEN }]}>{med.name} • {med.dosage}</Text>
                               </View>
                             ))}
                           </View>
@@ -232,10 +242,19 @@ const ClassifyScreen = ({ navigation }: any) => {
                   </View>
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.chatBtn, {backgroundColor: PRIMARY_GREEN}]}
-                  onPress={() => navigation.navigate('Chat', { 
-                    initialMessage: `Tôi muốn hỏi thêm về bệnh ${result.disease_detail.name_vi}. Phác đồ trên cần lưu ý gì không?` 
+                {result.disease_detail.source && (
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, paddingHorizontal: 10 }}>
+                    <Icon name="book-open-variant" size={16} color="#78909C" style={{ marginTop: 2 }} />
+                    <Text style={{ fontSize: 13, color: '#78909C', marginLeft: 6, fontStyle: 'italic', flex: 1, lineHeight: 20 }}>
+                      Nguồn: {result.disease_detail.source}
+                    </Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.chatBtn, { backgroundColor: PRIMARY_GREEN }]}
+                  onPress={() => navigation.navigate('Chat', {
+                    initialMessage: `Tôi muốn hỏi thêm về bệnh ${result.disease_detail.name_vi}. Phác đồ trên cần lưu ý gì không?`
                   })}
                 >
                   <Icon name="chat-question-outline" size={24} color="#fff" />
@@ -247,19 +266,19 @@ const ClassifyScreen = ({ navigation }: any) => {
             {isHealthy && (
               <View style={styles.healthyCard}>
                 <Icon name="check-decagram" size={60} color="#2e7d32" />
-                <Text style={[styles.healthyTitle, {color: '#2e7d32'}]}>Kết quả an toàn</Text>
+                <Text style={[styles.healthyTitle, { color: '#2e7d32' }]}>Kết quả an toàn</Text>
                 <Text style={styles.healthyDesc}>
                   AI không tìm thấy dấu hiệu bệnh lý trong mẫu phân này. Hãy tiếp tục theo dõi sức khỏe tổng quát của đàn gà.
                 </Text>
               </View>
             )}
 
-            <TouchableOpacity style={styles.retryBtn} onPress={() => {setImageUri(null); setResult(null);}}>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => { setImageUri(null); setResult(null); }}>
               <Text style={styles.retryText}>KIỂM TRA MẪU KHÁC</Text>
             </TouchableOpacity>
           </Animated.View>
         )}
-        <View style={{height: 100}} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
