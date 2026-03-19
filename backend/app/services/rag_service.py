@@ -4,7 +4,7 @@ import chromadb
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain.schema import SystemMessage, HumanMessage
+from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from sqlalchemy.orm import joinedload
 
 from app.config import get_settings
@@ -85,7 +85,12 @@ class RAGService:
             elif provider == "gemini":
                 api_key = settings_dict.get("ai_gemini_key", self.settings.google_api_key)
                 if api_key:
-                    self.llm = ChatGoogleGenerativeAI(google_api_key=api_key, model=model_name, temperature=temperature)
+                    self.llm = ChatGoogleGenerativeAI(
+                        google_api_key=api_key, 
+                        model=model_name, 
+                        temperature=temperature,
+                        convert_system_message_to_human=True
+                    )
                     logger.info(f"✅ AI Initialized: Gemini ({model_name})")
                 else:
                     self.llm = None
@@ -276,8 +281,19 @@ class RAGService:
             final_system_prompt = base_prompt.replace("{context}", context)
             
             messages = [SystemMessage(content=final_system_prompt)]
-            for msg in history[-5:]:
-                messages.append(HumanMessage(content=msg["content"]) if msg["role"] == "user" else SystemMessage(content=msg["content"]))
+            
+            # Lọc lịch sử: Gemini yêu cầu sau SystemMessage phải là HumanMessage
+            # Nếu tin nhắn đầu tiên trong history là của AI, ta bỏ qua nó
+            history_segment = history[-5:]
+            while history_segment and history_segment[0].get("role") != "user":
+                history_segment.pop(0)
+
+            for msg in history_segment:
+                if msg["role"] == "user":
+                    messages.append(HumanMessage(content=msg["content"]))
+                else:
+                    messages.append(AIMessage(content=msg["content"]))
+            
             messages.append(HumanMessage(content=question))
             
             # Sử dụng callback để lấy token usage

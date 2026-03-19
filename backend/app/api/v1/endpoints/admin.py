@@ -48,7 +48,12 @@ async def test_ai_connection(
                 
             if not api_key: raise Exception("Thiếu Gemini API Key")
             from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(google_api_key=api_key, model=model_name, temperature=0)
+            llm = ChatGoogleGenerativeAI(
+                google_api_key=api_key, 
+                model=model_name, 
+                temperature=0,
+                convert_system_message_to_human=True
+            )
         else:
             raise Exception("Nhà cung cấp không hợp lệ")
 
