@@ -137,7 +137,9 @@ class RAGService:
             
             for i, chunk in enumerate(chunks):
                 ids.append(f"dis_{disease.id}_chunk_{i}")
-                documents.append(chunk)
+                # CHỐNG MẤT GỐC NGỮ CẢNH: Đóng dấu Tên Bệnh vào tất cả các đoạn cắt (Enrichment)
+                enriched_chunk = f"[ĐÂY LÀ TÀI LIỆU CỦA BỆNH: {disease.name_vi}]\n{chunk}"
+                documents.append(enriched_chunk)
                 metadatas.append({
                     "id": disease.id, 
                     "type": "disease", 
@@ -190,7 +192,9 @@ class RAGService:
             
             for i, chunk in enumerate(chunks):
                 ids.append(f"gen_{knowledge.id}_chunk_{i}")
-                documents.append(chunk)
+                # CHỐNG MẤT GỐC NGỮ CẢNH
+                enriched_chunk = f"[ĐÂY LÀ KIẾN THỨC VỀ CHỦ ĐỀ: {knowledge.title}]\n{chunk}"
+                documents.append(enriched_chunk)
                 metadatas.append({
                     "id": knowledge.id, 
                     "type": "general", 
@@ -227,18 +231,32 @@ class RAGService:
             return {"answer": "Hệ thống AI chưa sẵn sàng.", "usage": None}
         try:
             query_vector = self.embeddings.embed_query(question)
-            # Tăng n_results lên 5 vì chunk_size đã thu nhỏ lại khoảng 700 ký tự (~256 tokens)
             results = self.collection.query(query_embeddings=[query_vector], n_results=5)
-            context = ""
+            
+            MAX_DISTANCE = 100000.0  # Tắt bộ lọc chặn Vector vì HuggingFace sinh L2 distance chưa chuẩn hóa (rất lớn).
+            formatted_chunks = []
+            
             if results['documents'] and results['documents'][0]:
-                # Sử dụng trực tiếp chunk thay vì substring cắt dở dang
-                # Lấy kèm Metadata Source đính lên đầu (Header) của từng Chunk
-                formatted_chunks = []
+                distances = results.get('distances', [[0]*len(results['documents'][0])])[0]
+                
                 for idx, doc in enumerate(results['documents'][0]):
-                    meta = results['metadatas'][0][idx] if results['metadatas'] else {}
+                    # Nếu khoảng cách xa vời vợi -> Lạc đề -> Không cho vào Prompt
+                    if distances[idx] > MAX_DISTANCE:
+                        continue
+                        
+                    meta = {}
+                    if results.get('metadatas') and len(results['metadatas'][0]) > idx:
+                        meta_raw = results['metadatas'][0][idx]
+                        if meta_raw is not None:
+                            meta = meta_raw
+                            
                     source_text = meta.get('source', 'Chưa phân loại')
                     formatted_chunks.append(f"[Nguồn tham khảo: {source_text}]\n{doc}")
-                
+            
+            # TRƯỜNG HỢP TRẮNG TAY SAU KHI LỌC
+            if not formatted_chunks:
+                context = "Không tìm thấy dữ liệu liên quan trong kho kiến thức."
+            else:
                 context = "THÔNG TIN CHUYÊN MÔN TÌM THẤY:\n\n" + "\n---\n".join(formatted_chunks)
             
             if not self.llm:
