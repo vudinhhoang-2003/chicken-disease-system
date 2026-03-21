@@ -1,14 +1,12 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, Image, 
-  ScrollView, Dimensions, StatusBar, SafeAreaView, ActivityIndicator, Platform 
+  View, Text, StyleSheet, TouchableOpacity,
+  ScrollView, StatusBar, ActivityIndicator, Platform
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthContext } from '../context/AuthContext';
 import { getWeatherAdvice, WeatherAdvice } from '../utils/weatherRules';
 import axios from 'axios';
-
-const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }: any) => {
   const { user, logout } = useContext(AuthContext);
@@ -57,8 +55,8 @@ const HomeScreen = ({ navigation }: any) => {
 
   const menuItems = [
     {
-      title: 'Giám sát đàn',
-      subtitle: 'Phát hiện gà ốm AI',
+      title: 'Kiểm tra đàn',
+      subtitle: 'Phát hiện gà ốm qua ảnh',
       icon: 'radar',
       color: '#2e7d32',
       bg: '#E8F5E9',
@@ -73,20 +71,12 @@ const HomeScreen = ({ navigation }: any) => {
       screen: 'Classify'
     },
     {
-      title: 'Trợ lý ảo AI',
-      subtitle: 'Tư vấn chuyên gia',
+      title: 'Hỏi đáp chăn nuôi',
+      subtitle: 'Đặt câu hỏi, nhận gợi ý',
       icon: 'robot-confused-outline',
       color: '#f57c00', // Accent from Web Admin
       bg: '#FFF3E0',
       screen: 'Chat'
-    },
-    {
-      title: 'Cẩm nang',
-      subtitle: 'Kỹ thuật chăn nuôi',
-      icon: 'book-open-page-variant',
-      color: '#689F38',
-      bg: '#F9FBE7',
-      screen: 'Knowledge'
     },
     {
       title: 'Nhật ký',

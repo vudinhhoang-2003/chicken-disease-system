@@ -10,7 +10,6 @@ import HomeScreen from '../screens/HomeScreen';
 import ClassifyScreen from '../screens/ClassifyScreen';
 import DetectScreen from '../screens/DetectScreen';
 import ChatScreen from '../screens/ChatScreen';
-import KnowledgeScreen from '../screens/KnowledgeScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 
 const Stack = createNativeStackNavigator();
@@ -55,7 +54,6 @@ const AppNavigator = () => {
             <Stack.Screen name="Classify" component={ClassifyScreen} />
             <Stack.Screen name="Detect" component={DetectScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
-            <Stack.Screen name="Knowledge" component={KnowledgeScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
           </>
         )}

@@ -215,7 +215,7 @@ const DetectScreen = ({ navigation }: any) => {
               <Text style={styles.reportText}>
                 {result.sick_count === 0 
                   ? "Tuyệt vời! Hệ thống không phát hiện bất kỳ cá thể nào có dấu hiệu bệnh lý. Hãy duy trì điều kiện chăm sóc hiện tại." 
-                  : `Cảnh báo: Đã phát hiện ${result.sick_count} cá thể có triệu chứng ủ rũ hoặc bất thường. Bạn nên cách ly ngay để tránh lây lan.`}
+                  : `Cảnh báo: Đã phát hiện ${result.sick_count} cá thể bất thường. Bạn nên cách ly ngay để tránh lây lan.`}
               </Text>
             </View>
 
