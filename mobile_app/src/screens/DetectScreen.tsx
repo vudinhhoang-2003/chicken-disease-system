@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Pressable, Image, 
-  ScrollView, ActivityIndicator, Alert, Dimensions, Animated, Easing, Platform, StatusBar, TouchableOpacity
+  ScrollView, Alert, Dimensions, Animated, Easing, TouchableOpacity
 } from 'react-native';
 import { launchCamera, launchImageLibrary, MediaType } from 'react-native-image-picker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -26,9 +26,19 @@ const DetectScreen = ({ navigation }: any) => {
   const slideUpAnim = useRef(new Animated.Value(100)).current;
 
   useEffect(() => {
-    if (loading) startScanAnimation();
-    else stopScanAnimation();
-  }, [loading]);
+    if (loading) {
+      scanAnim.setValue(0);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+        ])
+      ).start();
+    } else {
+      scanAnim.stopAnimation();
+      scanAnim.setValue(0);
+    }
+  }, [loading, scanAnim]);
 
   useEffect(() => {
     if (result) {
@@ -37,22 +47,7 @@ const DetectScreen = ({ navigation }: any) => {
         Animated.spring(slideUpAnim, { toValue: 0, friction: 6, useNativeDriver: true })
       ]).start();
     }
-  }, [result]);
-
-  const startScanAnimation = () => {
-    scanAnim.setValue(0);
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(scanAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true })
-      ])
-    ).start();
-  };
-
-  const stopScanAnimation = () => {
-    scanAnim.stopAnimation();
-    scanAnim.setValue(0);
-  };
+  }, [result, fadeAnim, slideUpAnim]);
 
   const scanTranslateY = scanAnim.interpolate({
     inputRange: [0, 1],
@@ -90,7 +85,7 @@ const DetectScreen = ({ navigation }: any) => {
         setResult(response.data);
         setLoading(false);
       }, 800);
-    } catch (error: any) {
+    } catch {
       Alert.alert('Lỗi', 'Không thể phân tích dữ liệu.');
       setLoading(false);
     }
@@ -100,6 +95,10 @@ const DetectScreen = ({ navigation }: any) => {
     setResult(null);
     setMediaUri(null);
     setMediaFile(null);
+  };
+
+  const handleGoToFecalDiagnosis = () => {
+    navigation.navigate('Classify');
   };
 
   const getStatusColor = () => {
@@ -219,6 +218,25 @@ const DetectScreen = ({ navigation }: any) => {
               </Text>
             </View>
 
+            {result.sick_count > 0 && (
+              <View style={styles.quickActionCard}>
+                <View style={styles.quickActionHeader}>
+                  <Icon name="microscope" size={22} color={PRIMARY_GREEN} />
+                  <Text style={styles.quickActionTitle}>Cần xác định rõ bệnh?</Text>
+                </View>
+                <Text style={styles.quickActionText}>
+                  Chuyển nhanh sang Chẩn đoán phân để kiểm tra mẫu phân và xác định bệnh cụ thể.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.quickActionBtn, { backgroundColor: PRIMARY_GREEN }]}
+                  onPress={handleGoToFecalDiagnosis}
+                >
+                  <Icon name="arrow-right-circle-outline" size={20} color="#fff" />
+                  <Text style={styles.quickActionBtnText}>CHUYỂN SANG CHẨN ĐOÁN PHÂN</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.finalActions}>
               <TouchableOpacity style={styles.btnOutline} onPress={resetScanner}>
                 <Text style={styles.btnOutlineText}>QUÉT LẠI</Text>
@@ -270,6 +288,12 @@ const styles = StyleSheet.create({
   reportHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   reportTitle: { fontSize: 16, fontWeight: 'bold' },
   reportText: { fontSize: 14, color: '#546E7A', lineHeight: 22 },
+  quickActionCard: { backgroundColor: '#F7FAF4', borderRadius: 24, padding: 20, marginTop: 16, borderWidth: 1, borderColor: '#DCE8D3' },
+  quickActionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  quickActionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1B5E20' },
+  quickActionText: { fontSize: 14, color: '#546E7A', lineHeight: 22 },
+  quickActionBtn: { height: 50, borderRadius: 16, marginTop: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, elevation: 3 },
+  quickActionBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 0.3 },
   finalActions: { flexDirection: 'row', gap: 12, marginTop: 25 },
   btnOutline: { flex: 1, height: 52, borderRadius: 16, borderWidth: 1, borderColor: '#CFD8DC', justifyContent: 'center', alignItems: 'center' },
   btnOutlineText: { color: '#78909C', fontWeight: 'bold' },
