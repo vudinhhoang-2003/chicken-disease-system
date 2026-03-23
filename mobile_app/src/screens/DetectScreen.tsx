@@ -101,10 +101,64 @@ const DetectScreen = ({ navigation }: any) => {
     navigation.navigate('Classify');
   };
 
+  const hasDetectedChickens = !!result && Number(result.total_chickens || 0) > 0;
+  const hasSickChickens = !!result && Number(result.sick_count || 0) > 0;
+
+  const getResultState = () => {
+    if (!result) return 'idle';
+    if (!hasDetectedChickens) return 'no_chicken';
+    if (hasSickChickens) return 'abnormal';
+    return 'healthy';
+  };
+
   const getStatusColor = () => {
-    if (!result) return '#B0BEC5';
-    if (result.sick_count > 0) return '#FF5252'; 
-    return '#2e7d32'; 
+    switch (getResultState()) {
+      case 'abnormal':
+        return '#FF5252';
+      case 'healthy':
+        return '#2e7d32';
+      case 'no_chicken':
+        return '#607D8B';
+      default:
+        return '#B0BEC5';
+    }
+  };
+
+  const getResultIconName = () => {
+    switch (getResultState()) {
+      case 'abnormal':
+        return 'alert-decagram';
+      case 'healthy':
+        return 'check-decagram';
+      case 'no_chicken':
+        return 'image-search-outline';
+      default:
+        return 'help-circle-outline';
+    }
+  };
+
+  const getResultLabel = () => {
+    switch (getResultState()) {
+      case 'abnormal':
+        return 'PHÁT HIỆN BẤT THƯỜNG';
+      case 'healthy':
+        return 'TRẠNG THÁI TỐT';
+      case 'no_chicken':
+        return 'KHÔNG PHÁT HIỆN GÀ';
+      default:
+        return '';
+    }
+  };
+
+  const getReportText = () => {
+    if (!result) return '';
+    if (!hasDetectedChickens) {
+      return 'Không phát hiện gà trong ảnh. Vui lòng chụp lại ảnh có gà rõ hơn hoặc chọn ảnh phù hợp để hệ thống phân tích.';
+    }
+    if (!hasSickChickens) {
+      return 'Tuyệt vời! Hệ thống không phát hiện bất kỳ cá thể nào có dấu hiệu bệnh lý. Hãy duy trì điều kiện chăm sóc hiện tại.';
+    }
+    return `Cảnh báo: Đã phát hiện ${result.sick_count} cá thể bất thường. Bạn nên cách ly ngay để tránh lây lan.`;
   };
 
   return (
@@ -144,9 +198,9 @@ const DetectScreen = ({ navigation }: any) => {
             
             {result && (
               <View style={[styles.resultLabelTag, { backgroundColor: getStatusColor() }]}>
-                <Icon name={result.sick_count > 0 ? "alert-decagram" : "check-decagram"} size={16} color="#fff" />
+                <Icon name={getResultIconName()} size={16} color="#fff" />
                 <Text style={styles.resultLabelText}>
-                  {result.sick_count > 0 ? "PHÁT HIỆN BẤT THƯỜNG" : "TRẠNG THÁI TỐT"}
+                  {getResultLabel()}
                 </Text>
               </View>
             )}
@@ -196,13 +250,13 @@ const DetectScreen = ({ navigation }: any) => {
                 <Text style={styles.statTitle}>TỔNG ĐÀN</Text>
                 <Text style={styles.statNumber}>{result.total_chickens}</Text>
               </View>
-              <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
-                <Text style={[styles.statTitle, {color: '#2E7D32'}]}>KHỎE MẠNH</Text>
-                <Text style={[styles.statNumber, {color: '#2E7D32'}]}>{result.healthy_count}</Text>
+              <View style={[styles.statCard, { backgroundColor: hasDetectedChickens ? '#E8F5E9' : '#FAFAFA' }]}>
+                <Text style={[styles.statTitle, {color: hasDetectedChickens ? '#2E7D32' : '#90A4AE'}]}>KHỎE MẠNH</Text>
+                <Text style={[styles.statNumber, {color: hasDetectedChickens ? '#2E7D32' : '#90A4AE'}]}>{result.healthy_count}</Text>
               </View>
-              <View style={[styles.statCard, { backgroundColor: result.sick_count > 0 ? '#FFEBEE' : '#FAFAFA' }]}>
-                <Text style={[styles.statTitle, {color: result.sick_count > 0 ? '#C62828' : '#B0BEC5'}]}>BỆNH</Text>
-                <Text style={[styles.statNumber, {color: result.sick_count > 0 ? '#C62828' : '#B0BEC5'}]}>{result.sick_count}</Text>
+              <View style={[styles.statCard, { backgroundColor: hasSickChickens ? '#FFEBEE' : '#FAFAFA' }]}>
+                <Text style={[styles.statTitle, {color: hasSickChickens ? '#C62828' : '#B0BEC5'}]}>BỆNH</Text>
+                <Text style={[styles.statNumber, {color: hasSickChickens ? '#C62828' : '#B0BEC5'}]}>{result.sick_count}</Text>
               </View>
             </View>
 
@@ -211,14 +265,10 @@ const DetectScreen = ({ navigation }: any) => {
                 <Icon name="file-chart-outline" size={22} color={DARK_GREEN} />
                 <Text style={[styles.reportTitle, {color: DARK_GREEN}]}>Báo cáo chẩn đoán</Text>
               </View>
-              <Text style={styles.reportText}>
-                {result.sick_count === 0 
-                  ? "Tuyệt vời! Hệ thống không phát hiện bất kỳ cá thể nào có dấu hiệu bệnh lý. Hãy duy trì điều kiện chăm sóc hiện tại." 
-                  : `Cảnh báo: Đã phát hiện ${result.sick_count} cá thể bất thường. Bạn nên cách ly ngay để tránh lây lan.`}
-              </Text>
+              <Text style={styles.reportText}>{getReportText()}</Text>
             </View>
 
-            {result.sick_count > 0 && (
+            {hasSickChickens && (
               <View style={styles.quickActionCard}>
                 <View style={styles.quickActionHeader}>
                   <Icon name="microscope" size={22} color={PRIMARY_GREEN} />

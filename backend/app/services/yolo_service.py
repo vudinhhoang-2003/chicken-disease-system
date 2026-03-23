@@ -56,6 +56,97 @@ class YOLOService:
         except Exception as e:
             logger.error(f"❌ Error loading models: {e}")
             raise
+
+    @staticmethod
+    def _is_healthy_class(class_name: str) -> bool:
+        """
+        Resolve the model label to a health state using exact normalized names.
+        This avoids brittle substring checks and keeps compatibility with
+        `healthyChicken/sickChicken` and `normal/abnormal` style labels.
+        """
+        normalized = "".join(ch.lower() for ch in class_name if ch.isalnum())
+        healthy_names = {"healthy", "healthychicken", "normal", "normalchicken"}
+        sick_names = {"sick", "sickchicken", "abnormal", "abnormalchicken", "unhealthy", "unhealthychicken"}
+
+        if normalized in healthy_names:
+            return True
+        if normalized in sick_names:
+            return False
+
+        return "healthy" in normalized and "unhealthy" not in normalized
+
+    @staticmethod
+    def _extract_detection_candidates(result) -> List[Dict]:
+        candidates = []
+        for idx, box in enumerate(result.boxes):
+            class_id = int(box.cls)
+            candidates.append({
+                "source_index": idx,
+                "class_id": class_id,
+                "class_name": result.names[class_id],
+                "confidence": float(box.conf),
+                "bbox": [float(x) for x in box.xyxy[0].tolist()]
+            })
+        return candidates
+
+    @staticmethod
+    def _bbox_overlap_metrics(bbox_a: List[float], bbox_b: List[float]) -> tuple[float, float, float]:
+        ax1, ay1, ax2, ay2 = bbox_a
+        bx1, by1, bx2, by2 = bbox_b
+
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+
+        inter_w = max(0.0, inter_x2 - inter_x1)
+        inter_h = max(0.0, inter_y2 - inter_y1)
+        inter_area = inter_w * inter_h
+
+        area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+        area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+        union = area_a + area_b - inter_area
+        iou = inter_area / union if union > 0 else 0.0
+        overlap_min = inter_area / min(area_a, area_b) if min(area_a, area_b) > 0 else 0.0
+
+        return inter_area, iou, overlap_min
+
+    @classmethod
+    def _is_conflicting_same_chicken(cls, first: Dict, second: Dict) -> bool:
+        if first["class_name"] == second["class_name"]:
+            return False
+
+        _, iou, overlap_min = cls._bbox_overlap_metrics(first["bbox"], second["bbox"])
+        if iou < 0.75 and overlap_min < 0.9:
+            return False
+
+        fx1, fy1, fx2, fy2 = first["bbox"]
+        sx1, sy1, sx2, sy2 = second["bbox"]
+        first_diag = np.hypot(fx2 - fx1, fy2 - fy1)
+        second_diag = np.hypot(sx2 - sx1, sy2 - sy1)
+        min_diag = max(1.0, min(first_diag, second_diag))
+
+        first_center = ((fx1 + fx2) / 2.0, (fy1 + fy2) / 2.0)
+        second_center = ((sx1 + sx2) / 2.0, (sy1 + sy2) / 2.0)
+        center_distance = np.hypot(first_center[0] - second_center[0], first_center[1] - second_center[1])
+
+        return center_distance / min_diag <= 0.2
+
+    @classmethod
+    def _suppress_conflicting_candidates(cls, candidates: List[Dict]) -> List[Dict]:
+        """
+        Remove contradictory healthy/sick boxes only when they are almost surely
+        the same chicken. This is narrower than agnostic NMS, so two chickens
+        hiding behind each other are less likely to collapse into one box.
+        """
+        kept: List[Dict] = []
+
+        for candidate in sorted(candidates, key=lambda item: item["confidence"], reverse=True):
+            if any(cls._is_conflicting_same_chicken(candidate, existing) for existing in kept):
+                continue
+            kept.append(candidate)
+
+        return sorted(kept, key=lambda item: item["source_index"])
     
     async def process_video(
         self,
@@ -110,28 +201,28 @@ class YOLOService:
             
             # Process frame logic
             if frame_count % (skip_frames + 1) == 0:
-                # Thêm iou=0.45 để xử lý chồng lấn gà tốt hơn trong video
                 results = self.detection_model(frame_resized, conf=conf_threshold, iou=0.45, verbose=False)
                 processed_frames_count += 1
+                frame_detections = self._suppress_conflicting_candidates(
+                    self._extract_detection_candidates(results[0])
+                )
                 
                 # Count stats
                 current_sick = 0
-                current_total = 0
+                current_total = len(frame_detections)
                 
                 annotated_frame = frame_resized.copy()
-                for box in results[0].boxes:
-                    current_total += 1
-                    class_id = int(box.cls)
-                    class_name = results[0].names[class_id]
+                for detection in frame_detections:
+                    class_name = detection["class_name"]
                     
-                    is_healthy = "healthy" in class_name.lower()
+                    is_healthy = self._is_healthy_class(class_name)
                     if not is_healthy:
                         current_sick += 1
                     
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    x1, y1, x2, y2 = map(int, detection["bbox"])
                     color = (0, 255, 0) if is_healthy else (0, 0, 255)
                     cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-                    label = f"{class_name} {box.conf[0]:.2f}"
+                    label = f"{class_name} {detection['confidence']:.2f}"
                     cv2.putText(annotated_frame, label, (x1, y1 - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 
@@ -202,8 +293,10 @@ class YOLOService:
             raise RuntimeError("Detection model not loaded")
         
         try:
-            # Run inference with iou=0.45 to handle crowded scenes better
             results = self.detection_model(image, conf=conf_threshold, iou=0.45, verbose=False)
+            filtered_detections = self._suppress_conflicting_candidates(
+                self._extract_detection_candidates(results[0])
+            )
             
             detections = []
             healthy_count = 0
@@ -211,17 +304,16 @@ class YOLOService:
             
             # Process each detection and DRAW custom boxes
             annotated_image = image.copy()
-            for idx, box in enumerate(results[0].boxes):
-                class_id = int(box.cls)
-                class_name = results[0].names[class_id]
-                confidence = float(box.conf)
-                bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
+            for idx, detection in enumerate(filtered_detections):
+                class_name = detection["class_name"]
+                confidence = detection["confidence"]
+                bbox = detection["bbox"]  # [x1, y1, x2, y2]
                 
                 # Coords for cv2
                 x1, y1, x2, y2 = map(int, bbox)
                 
                 # Determine color and count
-                is_healthy = "healthy" in class_name.lower()
+                is_healthy = self._is_healthy_class(class_name)
                 color = (0, 255, 0) if is_healthy else (0, 0, 255) # BGR
                 
                 if is_healthy:
