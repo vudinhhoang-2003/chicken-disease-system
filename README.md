@@ -49,7 +49,7 @@ Hệ thống bao gồm 4 thành phần chính:
 ## 📊 Hiệu Năng Mô Hình AI Chi Tiết
 
 ### Mô Hình Phát Hiện (Chicken Detection)
-- **Model:** YOLOv8n / YOLOv11n (6.2 MB)
+- **Model:** YOLOv8n (6.2 MB)
 - **Precision/Recall:** ~95%
 - **mAP@50:** 95%
 - **Dữ liệu:** 3,175 ảnh
@@ -121,12 +121,6 @@ npx react-native run-android
 ```
 
 ---
-
-## 📊 Sơ Đồ Database
-![Sơ Đồ Database](database.png)
-
-## 📊 Luồng Xử Lý (Sequence Diagram)
-![Sequence Diagram](sequence_diagram.png)
 
 ---
 
